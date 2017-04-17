@@ -4,6 +4,7 @@ machine:
     version: oraclejdk8
 dependencies:
   override:
+    - ./env.sh
     - mvn clean dependency:go-offline install -Dmaven.test.skip=true --fail-never --threads 5 -B
 test:
   override:
