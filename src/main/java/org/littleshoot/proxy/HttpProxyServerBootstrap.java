@@ -199,6 +199,22 @@ public interface HttpProxyServerBootstrap {
 
     /**
      * <p>
+     * Specify a {@link FailureHttpResponseComposer} to use for composing
+     * custom response message on unrecoverable failure
+     * </p>
+     *
+     * <p>
+     * Default = {@link BadGatewayFailureHttpResponseComposer}
+     * </p>
+     *
+     * @param unrecoverableFailureHttpResponseComposer custom response message composer
+     * @return
+     */
+    HttpProxyServerBootstrap withUnrecoverableFailureHttpResponseComposer(
+        FailureHttpResponseComposer unrecoverableFailureHttpResponseComposer);
+
+    /**
+     * <p>
      * Specify whether or not to use secure DNS lookups for outbound
      * connections.
      * </p>
