@@ -3,6 +3,7 @@ package org.littleshoot.proxy;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -10,13 +11,13 @@ import java.io.IOException;
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
-public class BadGatewayFailureHttpResponseComposerTest {
+public class DefaultFailureHttpResponseComposerTest {
 
   private static final String REQUEST_URI = "https://localhost/hi";
 
   @Test
   public void testDefault() throws IOException {
-    FailureHttpResponseComposer badGatewayResponseComposer = new BadGatewayFailureHttpResponseComposer();
+    FailureHttpResponseComposer badGatewayResponseComposer = new DefaultFailureHttpResponseComposer();
 
     HttpRequest initialRequest = mock(HttpRequest.class);
     when(initialRequest.getUri()).thenReturn(REQUEST_URI);
@@ -29,11 +30,16 @@ public class BadGatewayFailureHttpResponseComposerTest {
   }
 
   @Test
-  public void testCustomMessage() throws IOException {
-    FailureHttpResponseComposer badGatewayResponseComposer = new BadGatewayFailureHttpResponseComposer() {
+  public void testCustomMessageAndStatus() throws IOException {
+    FailureHttpResponseComposer badGatewayResponseComposer = new DefaultFailureHttpResponseComposer() {
       @Override
       protected String provideCustomMessage(HttpRequest httpRequest, Throwable cause) {
         return "Invalid certificate: " + httpRequest.getUri();
+      }
+
+      @Override
+      protected HttpResponseStatus provideCustomStatus(HttpRequest httpRequest, Throwable cause) {
+        return new HttpResponseStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR.code(), "Something is wrong");
       }
     };
 
@@ -42,14 +48,14 @@ public class BadGatewayFailureHttpResponseComposerTest {
 
     FullHttpResponse response = badGatewayResponseComposer.compose(initialRequest, new RuntimeException());
 
-    assertEquals(502, response.getStatus().code());
-    assertEquals("Bad Gateway", response.getStatus().reasonPhrase());
+    assertEquals(500, response.getStatus().code());
+    assertEquals("Something is wrong", response.getStatus().reasonPhrase());
     assertEquals("Invalid certificate: " + REQUEST_URI, new String(response.content().array()));
   }
 
   @Test
   public void testClearedContent() throws IOException {
-    FailureHttpResponseComposer badGatewayResponseComposer = new BadGatewayFailureHttpResponseComposer();
+    FailureHttpResponseComposer badGatewayResponseComposer = new DefaultFailureHttpResponseComposer();
 
     HttpRequest initialRequest = mock(HttpRequest.class);
     when(initialRequest.getUri()).thenReturn(REQUEST_URI);
