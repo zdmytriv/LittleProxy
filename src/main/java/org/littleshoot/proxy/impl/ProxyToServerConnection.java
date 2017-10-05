@@ -881,6 +881,10 @@ public class ProxyToServerConnection extends ProxyConnection<HttpResponse> {
     private void initChannelPipeline(ChannelPipeline pipeline,
             HttpRequest httpRequest) {
 
+        if (proxyServer.getGlobalStateHandler() != null) {
+            pipeline.addLast("inboundGlobalStateHandler", new InboundGlobalStateHandler(clientConnection));
+        }
+
         if (trafficHandler != null) {
             pipeline.addLast("global-traffic-shaping", trafficHandler);
         }
@@ -909,6 +913,10 @@ public class ProxyToServerConnection extends ProxyConnection<HttpResponse> {
                 "idle",
                 new IdleStateHandler(0, 0, proxyServer
                         .getIdleConnectionTimeout()));
+
+        if (proxyServer.getGlobalStateHandler() != null) {
+            pipeline.addLast("outboundGlobalStateHandler", new OutboundGlobalStateHandler(clientConnection));
+        }
 
         pipeline.addLast("handler", this);
     }

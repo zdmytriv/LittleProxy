@@ -62,6 +62,7 @@ import static org.littleshoot.proxy.impl.ConnectionState.*;
  */
 abstract class ProxyConnection<I extends HttpObject> extends
         SimpleChannelInboundHandler<Object> {
+
     protected final ProxyConnectionLogger LOG = new ProxyConnectionLogger(this);
 
     protected final DefaultHttpProxyServer proxyServer;
@@ -741,6 +742,52 @@ abstract class ProxyConnection<I extends HttpObject> extends
 
         protected abstract void responseRead(HttpResponse httpResponse);
     }
+
+    @Sharable
+    protected class InboundGlobalStateHandler extends
+        ChannelInboundHandlerAdapter {
+
+        private final ProxyConnection<HttpRequest> clientToProxyConnection;
+
+        InboundGlobalStateHandler(ProxyConnection<HttpRequest> clientToProxyConnection) {
+            this.clientToProxyConnection = clientToProxyConnection;
+        }
+
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg)
+            throws Exception {
+            try {
+                proxyServer.getGlobalStateHandler().restoreFromChannel(clientToProxyConnection.channel);
+                super.channelRead(ctx, msg);
+            } finally {
+                proxyServer.getGlobalStateHandler().clear();
+            }
+        }
+    }
+
+    @Sharable
+    protected class OutboundGlobalStateHandler extends
+        ChannelOutboundHandlerAdapter {
+
+        private final ProxyConnection<HttpRequest> clientToProxyConnection;
+
+        OutboundGlobalStateHandler(ProxyConnection<HttpRequest> clientToProxyConnection) {
+            this.clientToProxyConnection = clientToProxyConnection;
+        }
+
+        @Override
+        public void write(ChannelHandlerContext ctx,
+                          Object msg, ChannelPromise promise)
+            throws Exception {
+            try {
+                proxyServer.getGlobalStateHandler().restoreFromChannel(clientToProxyConnection.channel);
+                super.write(ctx, msg, promise);
+            } finally {
+                proxyServer.getGlobalStateHandler().clear();
+            }
+        }
+    }
+
 
     /**
      * Utility handler for monitoring bytes written on this connection.
