@@ -73,7 +73,7 @@
         <pluginRepository>
             <id>jfog</id>
             <name>jfrog</name>
-            <url>https://dl.bintray.com/vg/vgs-misc</url>
+            <url>https://dl.bintray.com/vg/vgs-oss</url>
             <snapshots>
                 <enabled>true</enabled>
             </snapshots>
@@ -201,7 +201,7 @@
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
-            <version>20.0</version>
+            <version>23.0</version>
         </dependency>
 
         <dependency>
@@ -570,7 +570,7 @@
             <extension>
                 <groupId>io.vgs.tools</groupId>
                 <artifactId>aws-maven</artifactId>
-                <version>1.4.2</version>
+                <version>1.4.3</version>
             </extension>
         </extensions>
 
