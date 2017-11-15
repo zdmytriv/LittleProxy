@@ -74,6 +74,7 @@ jobs:
           command: |
             ulimit -a
             ulimit -n 4096
+            ulimit -a
             mvn test -T2C
       - <<: *save-maven-cache
       - <<: *persist-workspace
