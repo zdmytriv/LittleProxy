@@ -1,19 +1,98 @@
 ---
-machine:
-  java:
-    version: oraclejdk8
+version: 2
+references:
+  workspace_root: &workspace_root
+    /tmp/workspace
+
+  attach_workspace: &attach_workspace
+    attach_workspace:
+      at: *workspace_root
+
+job-defaults: &job-defaults
+  working_directory: &working_directory
+    ~/lp
+  test_results_directory: &test_results_directory
+    /tmp/test-results
   environment:
-    AWS_PROFILE: vgs-dev
-dependencies:
-  override:
-    - ./env.sh
-    - mvn clean dependency:go-offline install -Dmaven.test.skip=true --fail-never --threads 5 -B
-test:
-  override:
-    - mvn test -T2C
-deployment:
-  snapshot:
-    branch: vgs-edition
-    owner: verygoodsecurity
-    commands:
-      - mvn deploy -DskipTests=true
+    - AWS_DEFAULT_REGION: us-west-2
+    - AWS_REGION: us-west-2
+    - AWS_ACCOUNT_ID: "883127560329"
+    - VGS_DEV_ARTIFACT_BUCKET: vault-dev-01-audits-01-artifact-19k6160zpr44j
+    - AWS_PROFILE: vgs-dev
+
+setup-env: &setup-env
+  run:
+    name: Setup Environment
+    command: ./env.sh
+
+save-maven-cache: &save-maven-cache
+  save_cache:
+    key: vault-{{ checksum "pom.xml" }}
+    paths:
+      - ~/.m2
+
+restore-maven-cache: &restore-maven-cache
+  restore_cache:
+    key: vault-{{ checksum "pom.xml" }}
+
+version: 2
+jobs:
+  build:
+    machine:
+      enabled: true
+    <<: *job-defaults
+    steps:
+      - checkout
+      - <<: *setup-env
+      - <<: *restore-maven-cache
+      - run:
+          name: Install dependencies
+          command: |
+            mvn clean dependency:go-offline package install -U -Dmaven.test.skip.exec -T 2.0C -B
+      - <<: *save-maven-cache
+      - <<: *persist-workspace
+
+  test:
+    machine:
+      enabled: true
+    <<: *job-defaults
+    steps:
+      - checkout
+      - <<: *setup-env
+      - <<: *restore-maven-cache
+      - run:
+          name: Run tests
+          command: |
+            mvn test -T2C
+      - <<: *save-maven-cache
+      - <<: *persist-workspace
+
+  deploy:
+    machine:
+      enabled: true
+    <<: *job-defaults
+    steps:
+      - checkout
+      - <<: *setup-env
+      - <<: *restore-maven-cache
+      - run:
+          name: Deployment
+          command: |
+            mvn deploy -DskipTests=true
+
+workflows:
+  version: 2
+  gunit:
+    jobs:
+      - build
+      - test:
+          requires:
+            - build
+      - deploy:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+            branches:
+              only: /vgs-edition/
