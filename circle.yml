@@ -72,6 +72,8 @@ jobs:
       - run:
           name: Run tests
           command: |
+            ulimit -a
+            ulimit -n 4096
             mvn test -T2C
       - <<: *save-maven-cache
       - <<: *persist-workspace
