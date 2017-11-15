@@ -79,8 +79,8 @@ jobs:
       - <<: *persist-workspace
 
   deploy:
-    machine:
-      enabled: true
+    docker:
+      - image: circleci/8-jdk
     <<: *job-defaults
     steps:
       - checkout
