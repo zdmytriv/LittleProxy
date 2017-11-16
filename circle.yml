@@ -73,7 +73,7 @@ jobs:
           name: Run tests
           command: |
             ulimit -a
-            ulimit -n 8192
+            ulimit -n 4096
             ulimit -a
             mvn test -T2C
       - <<: *save-maven-cache
