@@ -744,6 +744,41 @@ abstract class ProxyConnection<I extends HttpObject> extends
     }
 
     @Sharable
+    protected class RequestTracerHandler extends ChannelDuplexHandler {
+
+        private final ProxyConnection<HttpRequest> clientToProxyConnection;
+
+        RequestTracerHandler(ProxyConnection<HttpRequest> clientToProxyConnection) {
+            this.clientToProxyConnection = clientToProxyConnection;
+        }
+
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            try {
+                proxyServer.getRequestTracer().start(clientToProxyConnection.channel);
+            } catch (Throwable t) {
+                LOG.warn("Unable to start tracing request", t);
+            } finally {
+                super.channelRead(ctx, msg);
+            }
+        }
+
+        @Override
+        public void write(ChannelHandlerContext ctx,
+                          Object msg, ChannelPromise promise) throws Exception {
+            try {
+                super.write(ctx, msg, promise);
+            } finally {
+                try {
+                    proxyServer.getRequestTracer().finish(clientToProxyConnection.channel);
+                } catch (Throwable t) {
+                    LOG.warn("Unable to finish request tracing", t);
+                }
+            }
+        }
+    }
+
+    @Sharable
     protected class InboundGlobalStateHandler extends
         ChannelInboundHandlerAdapter {
 
