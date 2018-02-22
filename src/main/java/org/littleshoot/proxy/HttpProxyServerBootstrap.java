@@ -411,4 +411,17 @@ public interface HttpProxyServerBootstrap {
      * @return proxy server bootstrap for chaining
      */
     HttpProxyServerBootstrap withThreadPoolConfiguration(ThreadPoolConfiguration configuration);
+
+    /**
+     * <p>
+     * Specify a {@link AuthenticationRateLimiter} that is used for rate limiting user authentications
+     * </p>
+     *
+     * <p>
+     * Default = null
+     * </p>
+     *
+     * @param authenticationRateLimiter
+     */
+    HttpProxyServerBootstrap withAuthenticationRateLimiter(AuthenticationRateLimiter authenticationRateLimiter);
 }
