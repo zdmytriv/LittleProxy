@@ -1,9 +1,20 @@
 package org.littleshoot.proxy;
 
+import io.netty.handler.codec.http.HttpRequest;
+
 /**
- * Interface for rate limiting user's authentication requests
+ * Interface for rate limiting requests
  */
-public interface AuthenticationRateLimiter {
+public interface RateLimiter {
+
+  /**
+   * Rate Limiting general http requests
+   *
+   * @param httpRequest
+   * @return <code>true</code> if http request hit rate limit
+   * <code>false</code>.
+   */
+  boolean isOverLimit(HttpRequest httpRequest);
 
   /**
    * Rate Limiting user authentication requests

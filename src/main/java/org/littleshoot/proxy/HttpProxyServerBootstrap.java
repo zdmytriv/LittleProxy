@@ -414,14 +414,14 @@ public interface HttpProxyServerBootstrap {
 
     /**
      * <p>
-     * Specify a {@link AuthenticationRateLimiter} that is used for rate limiting user authentications
+     * Specify a {@link RateLimiter} that is used for rate limiting requests
      * </p>
      *
      * <p>
      * Default = null
      * </p>
      *
-     * @param authenticationRateLimiter
+     * @param rateLimiter
      */
-    HttpProxyServerBootstrap withAuthenticationRateLimiter(AuthenticationRateLimiter authenticationRateLimiter);
+    HttpProxyServerBootstrap withRateLimiter(RateLimiter rateLimiter);
 }

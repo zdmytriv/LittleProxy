@@ -19,7 +19,7 @@ import io.netty.util.concurrent.GlobalEventExecutor;
 import org.littleshoot.proxy.ActivityTracker;
 import org.littleshoot.proxy.GlobalStateHandler;
 import org.littleshoot.proxy.DefaultFailureHttpResponseComposer;
-import org.littleshoot.proxy.AuthenticationRateLimiter;
+import org.littleshoot.proxy.RateLimiter;
 import org.littleshoot.proxy.ChainedProxyManager;
 import org.littleshoot.proxy.DefaultHostResolver;
 import org.littleshoot.proxy.DnsSecServerResolver;
@@ -129,7 +129,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
     private final int maxHeaderSize;
     private final int maxChunkSize;
     private final boolean allowRequestsToOriginServer;
-    private final AuthenticationRateLimiter authenticationRateLimiter;
+    private final RateLimiter rateLimiter;
 
     /**
      * The alias or pseudonym for this proxy, used when adding the Via header.
@@ -271,7 +271,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
             int maxHeaderSize,
             int maxChunkSize,
             boolean allowRequestsToOriginServer,
-            AuthenticationRateLimiter authenticationRateLimiter) {
+            RateLimiter rateLimiter) {
         this.serverGroup = serverGroup;
         this.transportProtocol = transportProtocol;
         this.requestedAddress = requestedAddress;
@@ -315,7 +315,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
         this.maxHeaderSize = maxHeaderSize;
         this.maxChunkSize = maxChunkSize;
         this.allowRequestsToOriginServer = allowRequestsToOriginServer;
-        this.authenticationRateLimiter = authenticationRateLimiter;
+        this.rateLimiter = rateLimiter;
     }
 
     /**
@@ -405,8 +405,8 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
 		return maxChunkSize;
 	}
 
-	  public AuthenticationRateLimiter getAuthenticationRateLimiter() {
-        return authenticationRateLimiter;
+	  public RateLimiter getRateLimiter() {
+        return rateLimiter;
     }
 
 	public boolean isAllowRequestsToOriginServer() {
@@ -443,7 +443,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
                     maxHeaderSize,
                     maxChunkSize,
                     allowRequestsToOriginServer,
-                    authenticationRateLimiter);
+                    rateLimiter);
     }
 
     @Override
@@ -687,7 +687,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
         private int maxHeaderSize = MAX_HEADER_SIZE_DEFAULT;
         private int maxChunkSize = MAX_CHUNK_SIZE_DEFAULT;
         private boolean allowRequestToOriginServer = false;
-        private AuthenticationRateLimiter authenticationRateLimiter;
+        private RateLimiter rateLimiter;
 
         private DefaultHttpProxyServerBootstrap() {
         }
@@ -718,7 +718,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
                 int maxHeaderSize,
                 int maxChunkSize,
                 boolean allowRequestToOriginServer,
-                AuthenticationRateLimiter authenticationRateLimiter) {
+                RateLimiter rateLimiter) {
             this.serverGroup = serverGroup;
             this.transportProtocol = transportProtocol;
             this.requestedAddress = requestedAddress;
@@ -749,7 +749,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
         	this.maxHeaderSize = maxHeaderSize;
         	this.maxChunkSize = maxChunkSize;
         	this.allowRequestToOriginServer = allowRequestToOriginServer;
-          this.authenticationRateLimiter = authenticationRateLimiter;
+          this.rateLimiter = rateLimiter;
         }
 
         private DefaultHttpProxyServerBootstrap(Properties props) {
@@ -997,8 +997,8 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
         }
 
         @Override
-        public HttpProxyServerBootstrap withAuthenticationRateLimiter(AuthenticationRateLimiter authenticationRateLimiter) {
-            this.authenticationRateLimiter = authenticationRateLimiter;
+        public HttpProxyServerBootstrap withRateLimiter(RateLimiter rateLimiter) {
+            this.rateLimiter = rateLimiter;
             return this;
         }
 
@@ -1021,7 +1021,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
                     idleConnectionTimeout, activityTrackers, connectTimeout,
                     serverResolver, readThrottleBytesPerSecond, writeThrottleBytesPerSecond,
                     localAddress, proxyAlias, maxInitialLineLength, maxHeaderSize, maxChunkSize,
-                    allowRequestToOriginServer, authenticationRateLimiter);
+                    allowRequestToOriginServer, rateLimiter);
         }
 
         private InetSocketAddress determineListenAddress() {
