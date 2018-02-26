@@ -999,12 +999,29 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
             return false;
         }
 
+      Credentials credentials = ProxyUtils.getCredentials(request);
+
+      if (credentials == null) {
+        writeAuthenticationRequired(authenticator.getRealm());
+        return true;
+      }
+
         RateLimiter rateLimiter = proxyServer.getRateLimiter();
 
-        if(rateLimiter != null && rateLimiter.isAuthenticationOverLimit(userName)) {
-            writeTooManyAuthenticationRequests(userName);
+          if(rateLimiter.isAuthenticationOverLimit(request)) {
+            writeTooManyRequests(request, "Too many authentication requests for user: " + credentials.getUsername());
             return true;
-        }
+          }
+
+          if (!authenticator.authenticate(credentials.getUsername(), credentials.getPassword())) {
+            if(rateLimiter.isAuthenticationFailureOverLimit(request)) {
+              writeTooManyRequests(request, "Too many authentication failure requests");
+              return true;
+            }
+
+            writeAuthenticationRequired(authenticator.getRealm());
+            return true;
+          }
 
         if (!authenticator.authenticate(userName, password)) {
             if(rateLimiter != null && rateLimiter.isAuthenticationFailureOverLimit(userName)) {

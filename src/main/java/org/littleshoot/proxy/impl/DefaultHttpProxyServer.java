@@ -19,6 +19,7 @@ import io.netty.util.concurrent.GlobalEventExecutor;
 import org.littleshoot.proxy.ActivityTracker;
 import org.littleshoot.proxy.GlobalStateHandler;
 import org.littleshoot.proxy.DefaultFailureHttpResponseComposer;
+import org.littleshoot.proxy.NoOpRateLimiter;
 import org.littleshoot.proxy.RateLimiter;
 import org.littleshoot.proxy.ChainedProxyManager;
 import org.littleshoot.proxy.DefaultHostResolver;
@@ -687,7 +688,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
         private int maxHeaderSize = MAX_HEADER_SIZE_DEFAULT;
         private int maxChunkSize = MAX_CHUNK_SIZE_DEFAULT;
         private boolean allowRequestToOriginServer = false;
-        private RateLimiter rateLimiter;
+        private RateLimiter rateLimiter = new NoOpRateLimiter();
 
         private DefaultHttpProxyServerBootstrap() {
         }

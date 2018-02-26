@@ -19,18 +19,18 @@ public interface RateLimiter {
   /**
    * Rate Limiting user authentication requests
    *
-   * @param username
+   * @param httpRequest
    * @return <code>true</code> if user hit rate limit
    * <code>false</code>.
    */
-  boolean isAuthenticationOverLimit(String username);
+  boolean isAuthenticationOverLimit(HttpRequest httpRequest);
 
   /**
    * Rate Limiting user authentication failures requests
    *
-   * @param username
+   * @param httpRequest
    * @return <code>true</code> if user's authentication failures hit rate limit
    * <code>false</code>.
    */
-  boolean isAuthenticationFailureOverLimit(String username);
+  boolean isAuthenticationFailureOverLimit(HttpRequest httpRequest);
 }
