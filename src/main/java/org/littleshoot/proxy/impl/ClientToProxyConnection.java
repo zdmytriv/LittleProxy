@@ -1013,7 +1013,8 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
             return true;
         }
 
-        if (!authenticator.authenticate(credentials.getUsername(), credentials.getPassword())) {
+        if (credentials instanceof BasicAuthCredentials
+            && !authenticator.authenticate(((BasicAuthCredentials) credentials).getUsername(), ((BasicAuthCredentials) credentials).getPassword())) {
             if(rateLimiter.isAuthenticationFailureOverLimit(request)) {
                 writeTooManyRequests(rateLimiter, request);
                 return true;

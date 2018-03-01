@@ -4,7 +4,7 @@ import org.junit.Ignore;
 import org.littleshoot.proxy.BaseProxyTest;
 import org.littleshoot.proxy.ProxyAuthenticator;
 import org.littleshoot.proxy.RateLimiter;
-import org.littleshoot.proxy.impl.Credentials;
+import org.littleshoot.proxy.impl.BasicAuthCredentials;
 import org.littleshoot.proxy.impl.ProxyUtils;
 
 import java.util.HashMap;
@@ -73,14 +73,14 @@ public class RateLimitTestBase extends BaseProxyTest implements ProxyAuthenticat
 
     @Override
     public boolean isAuthenticationOverLimit(HttpRequest request) {
-      Credentials credentials = ProxyUtils.getCredentials(request);
+      BasicAuthCredentials credentials = (BasicAuthCredentials) ProxyUtils.getCredentials(request);
       addUser(credentials.getUsername());
       return attemptsPerUser.get(credentials.getUsername()) >= authenticationLimit;
     }
 
     @Override
     public boolean isAuthenticationFailureOverLimit(HttpRequest request) {
-      Credentials credentials = ProxyUtils.getCredentials(request);
+      BasicAuthCredentials credentials = (BasicAuthCredentials) ProxyUtils.getCredentials(request);
       addUser(credentials.getUsername());
       return attemptsPerUser.get(credentials.getUsername()) >= authenticationFailureLimit;
     }

@@ -668,7 +668,7 @@ public class ProxyUtils {
     }
 
     /**
-     * Get proxy authentication credentials from PROXY_AUTHORIZATION header
+     * Get proxy authentication credentials from PROXY_AUTHORIZATION header. At the moment only Basic Authentication is supported.
      * @param request Netty request
      * @return either credentials or null is no correct header specified
      */
@@ -681,12 +681,17 @@ public class ProxyUtils {
         String fullValue = values.iterator().next();
         String value = StringUtils.substringAfter(fullValue, "Basic ").trim();
 
-        byte[] decodedValue = BaseEncoding.base64().decode(value);
-        String decodedString = new String(decodedValue, Charset.forName("UTF-8"));
+        if(StringUtils.isNotEmpty(value)) {
+            byte[] decodedValue = BaseEncoding.base64().decode(value);
+            String decodedString = new String(decodedValue, Charset.forName("UTF-8"));
 
-        String userName = StringUtils.substringBefore(decodedString, ":");
-        String password = StringUtils.substringAfter(decodedString, ":");
+            String userName = StringUtils.substringBefore(decodedString, ":");
+            String password = StringUtils.substringAfter(decodedString, ":");
 
-        return new Credentials(userName, password);
+            return new BasicAuthCredentials(userName, password);
+        }
+
+        LOG.debug("Unsupported authentication type. Only 'Basic' scheme is supported.");
+        return null;
     }
 }
