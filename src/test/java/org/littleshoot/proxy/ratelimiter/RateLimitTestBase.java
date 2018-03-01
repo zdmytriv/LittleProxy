@@ -1,5 +1,6 @@
 package org.littleshoot.proxy.ratelimiter;
 
+import org.junit.Ignore;
 import org.littleshoot.proxy.BaseProxyTest;
 import org.littleshoot.proxy.ProxyAuthenticator;
 import org.littleshoot.proxy.RateLimiter;
@@ -9,8 +10,12 @@ import org.littleshoot.proxy.impl.ProxyUtils;
 import java.util.HashMap;
 import java.util.Map;
 
+import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpVersion;
 
+@Ignore
 public class RateLimitTestBase extends BaseProxyTest implements ProxyAuthenticator {
 
   static final int AUTHENTICATION_LIMIT = 10;
@@ -78,6 +83,11 @@ public class RateLimitTestBase extends BaseProxyTest implements ProxyAuthenticat
       Credentials credentials = ProxyUtils.getCredentials(request);
       addUser(credentials.getUsername());
       return attemptsPerUser.get(credentials.getUsername()) >= authenticationFailureLimit;
+    }
+
+    @Override
+    public FullHttpResponse limitReachedHttpResponse(HttpRequest request) {
+      return ProxyUtils.createFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.TOO_MANY_REQUESTS, "429 Too Many Requests");
     }
 
     private void addUser(String username) {
