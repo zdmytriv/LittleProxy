@@ -5,6 +5,7 @@ import org.littleshoot.proxy.ResponseInfo;
 
 import io.netty.handler.codec.http.HttpResponseStatus;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class AuthenticationRateLimitTest extends RateLimitTestBase {
@@ -14,6 +15,7 @@ public class AuthenticationRateLimitTest extends RateLimitTestBase {
     int numRequests = 0;
 
     boolean rateLimited = false;
+    int numValidRequests = 0;
     while (numRequests++ < AUTHENTICATION_LIMIT + 1) {
       ResponseInfo proxiedResponse = httpGetWithApacheClient(webHost, DEFAULT_RESOURCE, true, false);
 
@@ -21,8 +23,11 @@ public class AuthenticationRateLimitTest extends RateLimitTestBase {
         rateLimited = true;
         break;
       }
+
+      numValidRequests++;
     }
 
     assertTrue(rateLimited);
+    assertEquals(AUTHENTICATION_LIMIT - 1, numValidRequests);
   }
 }

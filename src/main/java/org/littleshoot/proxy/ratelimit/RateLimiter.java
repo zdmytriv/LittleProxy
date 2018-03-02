@@ -1,4 +1,4 @@
-package org.littleshoot.proxy;
+package org.littleshoot.proxy.ratelimit;
 
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpRequest;
@@ -38,5 +38,5 @@ public interface RateLimiter {
   /**
    * Http response that is going to be returned to user when limit is reached
    */
-  FullHttpResponse limitReachedHttpResponse(HttpRequest request);
+  FullHttpResponse limitReachedResponse(HttpRequest request);
 }

@@ -1,4 +1,4 @@
-package org.littleshoot.proxy;
+package org.littleshoot.proxy.ratelimit;
 
 import org.littleshoot.proxy.impl.ProxyUtils;
 
@@ -28,7 +28,10 @@ public class NoOpRateLimiter implements RateLimiter {
   }
 
   @Override
-  public FullHttpResponse limitReachedHttpResponse(HttpRequest request) {
-    return ProxyUtils.createFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.TOO_MANY_REQUESTS, "429 Too Many Requests");
+  public FullHttpResponse limitReachedResponse(HttpRequest request) {
+    return ProxyUtils.createFullHttpResponse(
+        HttpVersion.HTTP_1_1,
+        HttpResponseStatus.TOO_MANY_REQUESTS,
+        "429 Too Many Requests");
   }
 }

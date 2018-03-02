@@ -1,11 +1,11 @@
-package org.littleshoot.proxy.impl;
+package org.littleshoot.proxy.authenticator;
 
-public class BasicAuthCredentials implements Credentials {
+public final class BasicCredentials {
 
   private final String username;
   private final String password;
 
-  BasicAuthCredentials(String username, String password) {
+  public BasicCredentials(String username, String password) {
     this.username = username;
     this.password = password;
   }

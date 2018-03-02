@@ -27,7 +27,7 @@ import org.littleshoot.proxy.ActivityTracker;
 import org.littleshoot.proxy.DefaultFailureHttpResponseComposer;
 import org.littleshoot.proxy.ExceptionHandler;
 import org.littleshoot.proxy.FailureHttpResponseComposer;
-import org.littleshoot.proxy.RateLimiter;
+import org.littleshoot.proxy.ratelimit.RateLimiter;
 import org.littleshoot.proxy.FlowContext;
 import org.littleshoot.proxy.FullFlowContext;
 import org.littleshoot.proxy.HttpFilters;
@@ -999,28 +999,20 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
             return false;
         }
 
-      Credentials credentials = ProxyUtils.getCredentials(request);
-
-      if (credentials == null) {
-        writeAuthenticationRequired(authenticator.getRealm());
-        return true;
-      }
-
         RateLimiter rateLimiter = proxyServer.getRateLimiter();
 
         if(rateLimiter.isAuthenticationOverLimit(request)) {
-            writeTooManyRequests(rateLimiter, request);
+            write(rateLimiter.limitReachedResponse(request));
             return true;
         }
 
-        if (credentials instanceof BasicAuthCredentials
-            && !authenticator.authenticate(((BasicAuthCredentials) credentials).getUsername(), ((BasicAuthCredentials) credentials).getPassword())) {
+        if (!authenticator.authenticate(request)) {
             if(rateLimiter.isAuthenticationFailureOverLimit(request)) {
-                writeTooManyRequests(rateLimiter, request);
+                write(rateLimiter.limitReachedResponse(request));
                 return true;
             }
 
-            writeAuthenticationRequired(authenticator.getRealm());
+            write(authenticator.authenticationFailureResponse(request));
             return true;
         }
 

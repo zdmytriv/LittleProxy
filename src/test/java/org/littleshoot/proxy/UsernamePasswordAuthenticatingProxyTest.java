@@ -1,19 +1,21 @@
 package org.littleshoot.proxy;
 
+import org.littleshoot.proxy.authenticator.BasicProxyAuthenticator;
+
 import io.netty.handler.codec.http.HttpRequest;
 
 /**
  * Tests a single proxy that requires username/password authentication.
  */
 public class UsernamePasswordAuthenticatingProxyTest extends BaseProxyTest {
-    private static String USERNAME = "user1";
-    private static String PASSWORD = "password";
+    public final static String USERNAME = "user1";
+    public final static String PASSWORD = "password";
 
     @Override
     protected void setUp() {
         this.proxyServer = bootstrapProxy()
                 .withPort(0)
-                .withProxyAuthenticator(new TestBasicProxyAuthenticator())
+                .withProxyAuthenticator(new TestBasicProxyAuthenticator(USERNAME, PASSWORD))
                 .start();
     }
 
@@ -32,7 +34,15 @@ public class UsernamePasswordAuthenticatingProxyTest extends BaseProxyTest {
         return true;
     }
 
-    static class TestBasicProxyAuthenticator extends BasicProxyAuthenticator {
+    public static class TestBasicProxyAuthenticator extends BasicProxyAuthenticator {
+
+        private final String username;
+        private final String password;
+
+        public TestBasicProxyAuthenticator(String username, String password) {
+            this.username = username;
+            this.password = password;
+        }
 
         @Override
         public String getRealm() {
@@ -41,7 +51,7 @@ public class UsernamePasswordAuthenticatingProxyTest extends BaseProxyTest {
 
         @Override
         public boolean authenticate(String username, String password, HttpRequest request) {
-          return USERNAME.equals(username) && PASSWORD.equals(password);
+          return this.username.equals(username) && this.password.equals(password);
         }
     }
 }

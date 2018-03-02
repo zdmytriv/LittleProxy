@@ -22,6 +22,7 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.littleshoot.proxy.authenticator.BasicCredentials;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -667,12 +668,7 @@ public class ProxyUtils {
         }
     }
 
-    /**
-     * Get proxy authentication credentials from PROXY_AUTHORIZATION header. At the moment only Basic Authentication is supported.
-     * @param request Netty request
-     * @return either credentials or null is no correct header specified
-     */
-    public static Credentials getCredentials(HttpRequest request) {
+    public static BasicCredentials getBasicCredentials(HttpRequest request) {
         if (!request.headers().contains(HttpHeaders.Names.PROXY_AUTHORIZATION)) {
             return null;
         }
@@ -681,17 +677,16 @@ public class ProxyUtils {
         String fullValue = values.iterator().next();
         String value = StringUtils.substringAfter(fullValue, "Basic ").trim();
 
-        if(StringUtils.isNotEmpty(value)) {
+        if (StringUtils.isNotEmpty(value)) {
             byte[] decodedValue = BaseEncoding.base64().decode(value);
             String decodedString = new String(decodedValue, Charset.forName("UTF-8"));
 
             String userName = StringUtils.substringBefore(decodedString, ":");
             String password = StringUtils.substringAfter(decodedString, ":");
 
-            return new BasicAuthCredentials(userName, password);
+            return new BasicCredentials(userName, password);
         }
 
-        LOG.debug("Unsupported authentication type. Only 'Basic' scheme is supported.");
         return null;
     }
 }

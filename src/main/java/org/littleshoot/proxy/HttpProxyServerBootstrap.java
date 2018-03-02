@@ -1,6 +1,7 @@
 package org.littleshoot.proxy;
 
 import org.littleshoot.proxy.impl.ThreadPoolConfiguration;
+import org.littleshoot.proxy.ratelimit.RateLimiter;
 
 import java.net.InetSocketAddress;
 
