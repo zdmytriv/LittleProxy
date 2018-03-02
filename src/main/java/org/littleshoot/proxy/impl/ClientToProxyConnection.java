@@ -1,6 +1,5 @@
 package org.littleshoot.proxy.impl;
 
-import com.google.common.io.BaseEncoding;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
@@ -39,7 +38,6 @@ import javax.net.ssl.SSLSession;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.nio.charset.Charset;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -996,27 +994,12 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
         final ProxyAuthenticator authenticator = proxyServer
                 .getProxyAuthenticator();
 
-        if (authenticator == null)
+        if (authenticator == null) {
             return false;
-
-        if (!request.headers().contains(HttpHeaders.Names.PROXY_AUTHORIZATION)) {
-            writeAuthenticationRequired(authenticator.getRealm());
-            return true;
         }
 
-        List<String> values = request.headers().getAll(
-                HttpHeaders.Names.PROXY_AUTHORIZATION);
-        String fullValue = values.iterator().next();
-        String value = StringUtils.substringAfter(fullValue, "Basic ").trim();
-
-        byte[] decodedValue = BaseEncoding.base64().decode(value);
-
-        String decodedString = new String(decodedValue, Charset.forName("UTF-8"));
-        
-        String userName = StringUtils.substringBefore(decodedString, ":");
-        String password = StringUtils.substringAfter(decodedString, ":");
-        if (!authenticator.authenticate(userName, password)) {
-            writeAuthenticationRequired(authenticator.getRealm());
+        if (!authenticator.authenticate(request)) {
+            write(authenticator.authenticationFailureResponse(request));
             return true;
         }
 
@@ -1028,26 +1011,6 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
         request.headers().remove(HttpHeaders.Names.PROXY_AUTHORIZATION);
         authenticated.set(true);
         return false;
-    }
-
-    private void writeAuthenticationRequired(String realm) {
-        String body = "<!DOCTYPE HTML \"-//IETF//DTD HTML 2.0//EN\">\n"
-                + "<html><head>\n"
-                + "<title>407 Proxy Authentication Required</title>\n"
-                + "</head><body>\n"
-                + "<h1>Proxy Authentication Required</h1>\n"
-                + "<p>This server could not verify that you\n"
-                + "are authorized to access the document\n"
-                + "requested.  Either you supplied the wrong\n"
-                + "credentials (e.g., bad password), or your\n"
-                + "browser doesn't understand how to supply\n"
-                + "the credentials required.</p>\n" + "</body></html>\n";
-        FullHttpResponse response = ProxyUtils.createFullHttpResponse(HttpVersion.HTTP_1_1,
-                HttpResponseStatus.PROXY_AUTHENTICATION_REQUIRED, body);
-        HttpHeaders.setDate(response, new Date());
-        response.headers().set("Proxy-Authenticate",
-                "Basic realm=\"" + (realm == null ? "Restricted Files" : realm) + "\"");
-        write(response);
     }
 
     /***************************************************************************
