@@ -27,6 +27,7 @@ import org.littleshoot.proxy.ActivityTracker;
 import org.littleshoot.proxy.DefaultFailureHttpResponseComposer;
 import org.littleshoot.proxy.ExceptionHandler;
 import org.littleshoot.proxy.FailureHttpResponseComposer;
+import org.littleshoot.proxy.ratelimit.RateLimiter;
 import org.littleshoot.proxy.FlowContext;
 import org.littleshoot.proxy.FullFlowContext;
 import org.littleshoot.proxy.HttpFilters;
@@ -998,7 +999,19 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
             return false;
         }
 
+        RateLimiter rateLimiter = proxyServer.getRateLimiter();
+
+        if(rateLimiter.isAuthenticationOverLimit(request)) {
+            write(rateLimiter.limitReachedResponse(request));
+            return true;
+        }
+
         if (!authenticator.authenticate(request)) {
+            if(rateLimiter.isAuthenticationFailureOverLimit(request)) {
+                write(rateLimiter.limitReachedResponse(request));
+                return true;
+            }
+
             write(authenticator.authenticationFailureResponse(request));
             return true;
         }

@@ -19,6 +19,8 @@ import io.netty.util.concurrent.GlobalEventExecutor;
 import org.littleshoot.proxy.ActivityTracker;
 import org.littleshoot.proxy.GlobalStateHandler;
 import org.littleshoot.proxy.DefaultFailureHttpResponseComposer;
+import org.littleshoot.proxy.ratelimit.NoOpRateLimiter;
+import org.littleshoot.proxy.ratelimit.RateLimiter;
 import org.littleshoot.proxy.ChainedProxyManager;
 import org.littleshoot.proxy.DefaultHostResolver;
 import org.littleshoot.proxy.DnsSecServerResolver;
@@ -128,6 +130,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
     private final int maxHeaderSize;
     private final int maxChunkSize;
     private final boolean allowRequestsToOriginServer;
+    private final RateLimiter rateLimiter;
 
     /**
      * The alias or pseudonym for this proxy, used when adding the Via header.
@@ -268,7 +271,8 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
             int maxInitialLineLength,
             int maxHeaderSize,
             int maxChunkSize,
-            boolean allowRequestsToOriginServer) {
+            boolean allowRequestsToOriginServer,
+            RateLimiter rateLimiter) {
         this.serverGroup = serverGroup;
         this.transportProtocol = transportProtocol;
         this.requestedAddress = requestedAddress;
@@ -312,6 +316,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
         this.maxHeaderSize = maxHeaderSize;
         this.maxChunkSize = maxChunkSize;
         this.allowRequestsToOriginServer = allowRequestsToOriginServer;
+        this.rateLimiter = rateLimiter;
     }
 
     /**
@@ -401,6 +406,10 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
 		return maxChunkSize;
 	}
 
+	  public RateLimiter getRateLimiter() {
+        return rateLimiter;
+    }
+
 	public boolean isAllowRequestsToOriginServer() {
         return allowRequestsToOriginServer;
     }
@@ -434,7 +443,8 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
                     maxInitialLineLength,
                     maxHeaderSize,
                     maxChunkSize,
-                    allowRequestsToOriginServer);
+                    allowRequestsToOriginServer,
+                    rateLimiter);
     }
 
     @Override
@@ -678,6 +688,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
         private int maxHeaderSize = MAX_HEADER_SIZE_DEFAULT;
         private int maxChunkSize = MAX_CHUNK_SIZE_DEFAULT;
         private boolean allowRequestToOriginServer = false;
+        private RateLimiter rateLimiter = new NoOpRateLimiter();
 
         private DefaultHttpProxyServerBootstrap() {
         }
@@ -707,7 +718,8 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
                 int maxInitialLineLength,
                 int maxHeaderSize,
                 int maxChunkSize,
-                boolean allowRequestToOriginServer) {
+                boolean allowRequestToOriginServer,
+                RateLimiter rateLimiter) {
             this.serverGroup = serverGroup;
             this.transportProtocol = transportProtocol;
             this.requestedAddress = requestedAddress;
@@ -738,6 +750,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
         	this.maxHeaderSize = maxHeaderSize;
         	this.maxChunkSize = maxChunkSize;
         	this.allowRequestToOriginServer = allowRequestToOriginServer;
+          this.rateLimiter = rateLimiter;
         }
 
         private DefaultHttpProxyServerBootstrap(Properties props) {
@@ -984,6 +997,12 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
             return this;
         }
 
+        @Override
+        public HttpProxyServerBootstrap withRateLimiter(RateLimiter rateLimiter) {
+            this.rateLimiter = rateLimiter;
+            return this;
+        }
+
         private DefaultHttpProxyServer build() {
             final ServerGroup serverGroup;
 
@@ -1003,7 +1022,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
                     idleConnectionTimeout, activityTrackers, connectTimeout,
                     serverResolver, readThrottleBytesPerSecond, writeThrottleBytesPerSecond,
                     localAddress, proxyAlias, maxInitialLineLength, maxHeaderSize, maxChunkSize,
-                    allowRequestToOriginServer);
+                    allowRequestToOriginServer, rateLimiter);
         }
 
         private InetSocketAddress determineListenAddress() {

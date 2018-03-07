@@ -3,6 +3,8 @@ package org.littleshoot.proxy.impl;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.io.BaseEncoding;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.udt.nio.NioUdtProvider;
@@ -20,11 +22,13 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.littleshoot.proxy.authenticator.BasicCredentials;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -662,5 +666,27 @@ public class ProxyUtils {
                 }
             }
         }
+    }
+
+    public static BasicCredentials getBasicCredentials(HttpRequest request) {
+        if (!request.headers().contains(HttpHeaders.Names.PROXY_AUTHORIZATION)) {
+            return null;
+        }
+
+        List<String> values = request.headers().getAll(HttpHeaders.Names.PROXY_AUTHORIZATION);
+        String fullValue = values.iterator().next();
+        String value = StringUtils.substringAfter(fullValue, "Basic ").trim();
+
+        if (StringUtils.isNotEmpty(value)) {
+            byte[] decodedValue = BaseEncoding.base64().decode(value);
+            String decodedString = new String(decodedValue, Charset.forName("UTF-8"));
+
+            String userName = StringUtils.substringBefore(decodedString, ":");
+            String password = StringUtils.substringAfter(decodedString, ":");
+
+            return new BasicCredentials(userName, password);
+        }
+
+        return null;
     }
 }

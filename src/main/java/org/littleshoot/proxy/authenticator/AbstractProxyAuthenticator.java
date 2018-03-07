@@ -1,5 +1,6 @@
-package org.littleshoot.proxy;
+package org.littleshoot.proxy.authenticator;
 
+import org.littleshoot.proxy.ProxyAuthenticator;
 import org.littleshoot.proxy.impl.ProxyUtils;
 
 import java.util.Date;

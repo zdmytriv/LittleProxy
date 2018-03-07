@@ -1,6 +1,7 @@
 package org.littleshoot.proxy;
 
 import org.littleshoot.proxy.impl.ThreadPoolConfiguration;
+import org.littleshoot.proxy.ratelimit.RateLimiter;
 
 import java.net.InetSocketAddress;
 
@@ -411,4 +412,17 @@ public interface HttpProxyServerBootstrap {
      * @return proxy server bootstrap for chaining
      */
     HttpProxyServerBootstrap withThreadPoolConfiguration(ThreadPoolConfiguration configuration);
+
+    /**
+     * <p>
+     * Specify a {@link RateLimiter} that is used for rate limiting requests
+     * </p>
+     *
+     * <p>
+     * Default = null
+     * </p>
+     *
+     * @param rateLimiter
+     */
+    HttpProxyServerBootstrap withRateLimiter(RateLimiter rateLimiter);
 }
