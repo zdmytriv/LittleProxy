@@ -73,7 +73,9 @@ jobs:
       - run:
           name: Deploy
           command: |
-            unset AWS_ACCESS_KEY_ID; unset AWS_SECRET_ACCESS_KEY; mvn deploy -DskipTests=true
+            unset AWS_ACCESS_KEY_ID
+            unset AWS_SECRET_ACCESS_KEY
+            AWS_PROFILE=vgs-dev mvn deploy -DskipTests=true
   release:
     <<: *job-defaults
     machine:
@@ -93,8 +95,8 @@ jobs:
             git pull origin $RELEASE_BRANCH
             git reset --hard
             git tag -d $CIRCLE_TAG
-            mvn -B -X -e gitflow:release-start -DreleaseVersion=$CIRCLE_TAG
-            mvn -B -X -e gitflow:release-finish -DreleaseVersion=$CIRCLE_TAG -DpostReleaseGoals='deploy -DskipTests'
+            AWS_PROFILE=vgs-dev mvn -B -X -e gitflow:release-start -DreleaseVersion=$CIRCLE_TAG
+            AWS_PROFILE=vgs-dev mvn -B -X -e gitflow:release-finish -DreleaseVersion=$CIRCLE_TAG -DpostReleaseGoals='deploy -DskipTests'
             git push origin $RELEASE_BRANCH
 
 # === WORKFLOW ===

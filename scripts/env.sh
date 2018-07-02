@@ -9,6 +9,7 @@ echo "
 [default]
 aws_access_key_id=$AWS_ACCESS_KEY_ID
 aws_secret_access_key=$AWS_SECRET_ACCESS_KEY
+region = us-west-2
 [vgs-dev]
 region = us-west-2
 role_arn = arn:aws:iam::883127560329:role/StageDeploy
