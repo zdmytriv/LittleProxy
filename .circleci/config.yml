@@ -59,6 +59,7 @@ jobs:
       enabled: true
     steps:
       - checkout
+      - <<: *setup-env
       - <<: *attach-workspace
       - <<: *restore-maven-cache
       - run:
@@ -70,17 +71,23 @@ jobs:
     machine:
       enabled: true
     steps:
+      - checkout
+      - <<: *setup-env
       - <<: *attach-workspace
       - <<: *restore-maven-cache
       - run:
           name: Deploy
           command: |
+            unset AWS_ACCESS_KEY_ID
+            unset AWS_SECRET_ACCESS_KEY
             mvn deploy -DskipTests=true
   release:
     <<: *job-defaults
     machine:
       enabled: true
     steps:
+      - checkout
+      - <<: *setup-env
       - <<: *attach-workspace
       - <<: *restore-maven-cache
       - run:
