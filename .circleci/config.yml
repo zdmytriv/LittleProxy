@@ -56,6 +56,7 @@ jobs:
     machine:
       enabled: true
     steps:
+      - checkout
       - <<: *attach-workspace
       - <<: *restore-maven-cache
       - run:
