@@ -5,8 +5,8 @@ job-defaults: &job-defaults
     /tmp/test-results
   environment:
     - RELEASE_BRANCH: vgs-edition
-    - AWS_PROFILE: vgs-dev
     - AWS_DEFAULT_REGION: us-west-2
+    - AWS_PROFILE: vgs-dev
     - AWS_REGION: us-west-2
 
 # Set up AWS environment
@@ -74,7 +74,8 @@ jobs:
       - run:
           name: Deploy
           command: |
-            unset AWS_ACCESS_KEY_ID; unset AWS_SECRET_ACCESS_KEY;mvn deploy -DskipTests=true
+            ./scripts/env.sh
+            unset AWS_ACCESS_KEY_ID; unset AWS_SECRET_ACCESS_KEY; mvn deploy -DskipTests=true
   release:
     <<: *job-defaults
     machine:
