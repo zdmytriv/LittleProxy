@@ -50,7 +50,7 @@ jobs:
           name: Maven Clean Package
           command: |
             ./scripts/env.sh
-            cat ~/.aws/config
+            cat ~/.aws/credentials
             echo "============"
             aws configure list
             echo "============"
