@@ -45,11 +45,12 @@ jobs:
       enabled: true
     steps:
       - checkout
-      - <<: *setup-env
       - <<: *restore-maven-cache
       - run:
           name: Maven Clean Package
           command: |
+            ./scripts/env.sh
+            cat ~/.aws/credentials
             unset AWS_ACCESS_KEY_ID
             unset AWS_SECRET_ACCESS_KEY
             echo "============"
