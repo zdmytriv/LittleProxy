@@ -50,7 +50,9 @@ jobs:
       - run:
           name: Maven Clean Package
           command: |
-            unset AWS_ACCESS_KEY_ID; unset AWS_SECRET_ACCESS_KEY; mvn clean dependency:go-offline install -Dmaven.test.skip=true --threads 5 -B
+            echo AWS_ACCESS_KEY_ID
+            echo AWS_SECRET_ACCESS_KEY;
+            mvn clean dependency:go-offline install -Dmaven.test.skip=true --threads 5 -B
       - <<: *save-maven-cache
       - <<: *persist-workspace
   test:
