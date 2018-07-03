@@ -7,9 +7,9 @@ echo "
 #region = us-west-2
 #aws_access_key_id=$AWS_ACCESS_KEY_ID
 #aws_secret_access_key=$AWS_SECRET_ACCESS_KEY
-[profile vgs-dev]
+[vgs-dev]
 region = us-west-2
 role_arn = arn:aws:iam::883127560329:role/StageDeploy
 source_profile = default
-" > ~/.aws/config
+" >> ~/.aws/credentials
 
