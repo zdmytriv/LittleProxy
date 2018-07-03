@@ -51,8 +51,6 @@ jobs:
           command: |
             ./scripts/env.sh
             cat ~/.aws/credentials
-            unset AWS_ACCESS_KEY_ID
-            unset AWS_SECRET_ACCESS_KEY
             echo "============"
             aws configure list
             echo "============"
