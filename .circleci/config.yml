@@ -4,7 +4,7 @@ job-defaults: &job-defaults
   test_results_directory: &test_results_directory
     /tmp/test-results
   environment:
-    - AWS_ACCOUNT_ID: 883127560329
+    - RELEASE_BRANCH: vgs-edition
     - AWS_DEFAULT_REGION: us-west-2
     - AWS_REGION: us-west-2
     - AWS_PROFILE: vgs-dev
@@ -50,9 +50,7 @@ jobs:
       - run:
           name: Maven Clean Package
           command: |
-            echo $AWS_ACCESS_KEY_ID
-            echo $AWS_SECRET_ACCESS_KEY
-            mvn clean dependency:go-offline install -Dmaven.test.skip=true --threads 5 -B
+            unset AWS_ACCESS_KEY_ID; unset AWS_SECRET_ACCESS_KEY; mvn clean dependency:go-offline install -Dmaven.test.skip=true --threads 5 -B
       - <<: *save-maven-cache
       - <<: *persist-workspace
   test:
@@ -67,7 +65,7 @@ jobs:
       - run:
           name: Run test
           command: |
-            ./scripts/run_circle_tests.sh
+            unset AWS_ACCESS_KEY_ID; unset AWS_SECRET_ACCESS_KEY; ./scripts/run_circle_tests.sh
   deployment:
     <<: *job-defaults
     machine:
