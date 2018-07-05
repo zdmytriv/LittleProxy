@@ -120,6 +120,9 @@ workflows:
       - deployment:
           requires:
             - test
+          filters:
+            branches:
+              only: vgs-edition
       - release:
           requires:
             - test

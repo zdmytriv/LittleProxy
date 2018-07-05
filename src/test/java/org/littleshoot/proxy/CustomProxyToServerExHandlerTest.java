@@ -1,7 +1,6 @@
 package org.littleshoot.proxy;
 
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.littleshoot.proxy.extras.SelfSignedMitmManagerFactory;
 
@@ -35,7 +34,6 @@ public class CustomProxyToServerExHandlerTest extends MitmWithBadServerAuthentic
     this.upstreamProxy.abort();
   }
 
-  @Ignore
   @Test
   public void testCustomProxyToServerExHandler() throws Exception {
     super.testSimpleGetRequestOverHTTPS();
