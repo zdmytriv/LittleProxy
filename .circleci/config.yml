@@ -5,6 +5,8 @@ job-defaults: &job-defaults
     /tmp/test-results
   environment:
     - RELEASE_BRANCH: vgs-edition
+    - AWS_DEFAULT_REGION: us-west-2
+    - AWS_REGION: us-west-2
     - AWS_PROFILE: vgs-dev
 
 # Set up AWS environment
