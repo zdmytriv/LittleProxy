@@ -12,6 +12,8 @@ import java.nio.channels.spi.SelectorProvider;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -72,6 +74,8 @@ public class ServerGroup {
      */
     private final EnumMap<TransportProtocol, ProxyThreadPools> protocolThreadPools = new EnumMap<TransportProtocol, ProxyThreadPools>(TransportProtocol.class);
 
+    private final ExecutorService messageProcessingExecutor;
+
     /**
      * A mapping of selector providers to transport protocols. Avoids special-casing each transport protocol during
      * transport protocol initialization.
@@ -104,12 +108,19 @@ public class ServerGroup {
      * @param incomingWorkerThreads number of client-to-proxy worker threads per protocol
      * @param outgoingWorkerThreads number of proxy-to-server worker threads per protocol
      */
-    public ServerGroup(String name, int incomingAcceptorThreads, int incomingWorkerThreads, int outgoingWorkerThreads) {
+    public ServerGroup(String name, int incomingAcceptorThreads,
+                       int incomingWorkerThreads, int outgoingWorkerThreads,
+                       ExecutorService messageProcessingExecutor) {
         this.name = name;
         this.serverGroupId = serverGroupCount.getAndIncrement();
         this.incomingAcceptorThreads = incomingAcceptorThreads;
         this.incomingWorkerThreads = incomingWorkerThreads;
         this.outgoingWorkerThreads = outgoingWorkerThreads;
+        if (messageProcessingExecutor == null) {
+            this.messageProcessingExecutor = Executors.newCachedThreadPool();
+        } else {
+            this.messageProcessingExecutor = messageProcessingExecutor;
+        }
     }
 
     /**
@@ -219,6 +230,8 @@ public class ServerGroup {
             allEventLoopGroups.addAll(threadPools.getAllEventLoops());
         }
 
+        shutdownAndAwaitTermination(messageProcessingExecutor);
+
         for (EventLoopGroup group : allEventLoopGroups) {
             if (graceful) {
                 group.shutdownGracefully();
@@ -240,6 +253,24 @@ public class ServerGroup {
         }
 
         log.debug("Done shutting down server group");
+    }
+
+    private void shutdownAndAwaitTermination(ExecutorService pool) {
+        pool.shutdown(); // Disable new tasks from being submitted
+        try {
+            // Wait a while for existing tasks to terminate
+            if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
+                pool.shutdownNow(); // Cancel currently executing tasks
+                // Wait a while for tasks to respond to being cancelled
+                if (!pool.awaitTermination(60, TimeUnit.SECONDS))
+                    log.warn("Pool did not terminate");
+            }
+        } catch (InterruptedException ie) {
+            // (Re-)Cancel if current thread also interrupted
+            pool.shutdownNow();
+            // Preserve interrupt status
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**
@@ -279,6 +310,10 @@ public class ServerGroup {
      */
     public EventLoopGroup getProxyToServerWorkerPoolForTransport(TransportProtocol protocol) {
         return getThreadPoolsForProtocol(protocol).getProxyToServerWorkerPool();
+    }
+
+    public ExecutorService getMessageProcessingExecutor() {
+        return messageProcessingExecutor;
     }
 
     /**

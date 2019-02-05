@@ -51,6 +51,7 @@ import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -551,8 +552,8 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
                         DefaultHttpProxyServer.this,
                         sslEngineSource,
                         authenticateSslClients,
-                        ch.pipeline(),
-                        globalTrafficShapingHandler);
+                        globalTrafficShapingHandler,
+                        ch);
             };
         };
         switch (transportProtocol) {
@@ -620,6 +621,10 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
         return globalStateHandler;
     }
 
+    protected ExecutorService getMessageProcessingExecutor() {
+        return serverGroup.getMessageProcessingExecutor();
+    }
+
     protected RequestTracer getRequestTracer() {
         return requestTracer;
     }
@@ -670,6 +675,7 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
         private ExceptionHandler proxyToServerExHandler = null;
         private RequestTracer requestTracer = null;
         private GlobalStateHandler globalStateHandler = null;
+        private ExecutorService messageProcessorExecutor = null;
         private HttpFiltersSource filtersSource = new HttpFiltersSourceAdapter();
         private FailureHttpResponseComposer unrecoverableFailureHttpResponseComposer = new DefaultFailureHttpResponseComposer();
         private boolean transparent = false;
@@ -896,6 +902,13 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
         }
 
         @Override
+        public HttpProxyServerBootstrap withMessageProcessingExecutor(
+            ExecutorService messageProcessorExecutor) {
+            this.messageProcessorExecutor = messageProcessorExecutor;
+            return this;
+        }
+
+        @Override
         public HttpProxyServerBootstrap withFiltersSource(
                 HttpFiltersSource filtersSource) {
             this.filtersSource = filtersSource;
@@ -1010,7 +1023,8 @@ public class DefaultHttpProxyServer implements HttpProxyServer {
                 serverGroup = this.serverGroup;
             }
             else {
-                serverGroup = new ServerGroup(name, clientToProxyAcceptorThreads, clientToProxyWorkerThreads, proxyToServerWorkerThreads);
+                serverGroup = new ServerGroup(name, clientToProxyAcceptorThreads,
+                    clientToProxyWorkerThreads, proxyToServerWorkerThreads, messageProcessorExecutor);
             }
 
             return new DefaultHttpProxyServer(serverGroup,

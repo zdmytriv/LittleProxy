@@ -129,11 +129,10 @@ abstract class ProxyConnection<I extends HttpObject> extends
      */
     @SuppressWarnings("unchecked")
     private void readHTTP(HttpObject httpObject) {
-        ConnectionState nextState = getCurrentState();
         switch (getCurrentState()) {
         case AWAITING_INITIAL:
             if (httpObject instanceof HttpMessage) {
-                nextState = readHTTPInitial((I) httpObject);
+                ctx.fireChannelRead(httpObject);
             } else {
                 // Similar to the AWAITING_PROXY_AUTHENTICATION case below, we may enter an AWAITING_INITIAL
                 // state if the proxy responded to an earlier request with a 502 or 504 response, or a short-circuit
@@ -145,13 +144,13 @@ abstract class ProxyConnection<I extends HttpObject> extends
         case AWAITING_CHUNK:
             HttpContent chunk = (HttpContent) httpObject;
             readHTTPChunk(chunk);
-            nextState = ProxyUtils.isLastChunk(chunk) ? AWAITING_INITIAL
-                    : AWAITING_CHUNK;
+            become(ProxyUtils.isLastChunk(chunk) ? AWAITING_INITIAL
+                    : AWAITING_CHUNK);
             break;
         case AWAITING_PROXY_AUTHENTICATION:
             if (httpObject instanceof HttpRequest) {
                 // Once we get an HttpRequest, try to process it as usual
-                nextState = readHTTPInitial((I) httpObject);
+                ctx.fireChannelRead(httpObject);
             } else {
                 // Anything that's not an HttpRequest that came in while
                 // we're pending authentication gets dropped on the floor. This
@@ -179,7 +178,6 @@ abstract class ProxyConnection<I extends HttpObject> extends
             LOG.info("Ignoring message since the connection is closed or about to close");
             break;
         }
-        become(nextState);
     }
 
     /**
@@ -189,7 +187,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
      * @param httpObject
      * @return
      */
-    protected abstract ConnectionState readHTTPInitial(I httpObject);
+    protected abstract ConnectionState readHTTPInitial(ChannelHandlerContext ctx, Object httpObject);
 
     /**
      * Implement this to handle reading a chunk in a chunked transfer.

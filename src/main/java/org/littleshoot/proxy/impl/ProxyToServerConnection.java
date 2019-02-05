@@ -8,6 +8,8 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler.Sharable;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
@@ -31,6 +33,7 @@ import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.handler.traffic.GlobalTrafficShapingHandler;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCounted;
+import io.netty.util.concurrent.EventExecutorGroup;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import org.littleshoot.proxy.ActivityTracker;
@@ -221,7 +224,8 @@ public class ProxyToServerConnection extends ProxyConnection<HttpResponse> {
     }
 
     @Override
-    protected ConnectionState readHTTPInitial(HttpResponse httpResponse) {
+    protected ConnectionState readHTTPInitial(ChannelHandlerContext ctx, Object httpResponseObj) {
+        HttpResponse httpResponse = (HttpResponse) httpResponseObj;
         LOG.debug("Received raw response: {}", httpResponse);
 
         if (httpResponse.getDecoderResult().isFailure()) {
@@ -240,14 +244,47 @@ public class ProxyToServerConnection extends ProxyConnection<HttpResponse> {
         currentFilters.serverToProxyResponseReceiving();
 
         rememberCurrentResponse(httpResponse);
-        respondWith(httpResponse);
 
-        if (ProxyUtils.isChunked(httpResponse)) {
-            return AWAITING_CHUNK;
-        } else {
-            currentFilters.serverToProxyResponseReceived();
+        ctx.fireChannelRead(httpResponse);
 
-            return AWAITING_INITIAL;
+        return getCurrentState();
+    }
+
+    public class RespondToClientHandler extends ChannelInboundHandlerAdapter {
+
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) {
+            final HttpResponse httpResponse = (HttpResponse) msg;
+            if (ProxyUtils.isChunked(httpResponse)) {
+                respondWith(httpResponse);
+                become(AWAITING_CHUNK);
+            } else {
+                if (httpResponse instanceof ReferenceCounted) {
+                    LOG.debug("Retaining reference counted message");
+                    ((ReferenceCounted) httpResponse).retain();
+                }
+
+                proxyServer.getMessageProcessingExecutor()
+                    .execute(clientConnection.wrapTask(() -> {
+                      try {
+                          respondWith(httpResponse);
+                          currentFilters.serverToProxyResponseReceived();
+                          become(AWAITING_INITIAL);
+                      } catch (Exception e) {
+                          exceptionCaught(ctx, e);
+                      } finally {
+                          if (httpResponse instanceof ReferenceCounted) {
+                              LOG.debug("Retaining reference counted message");
+                              ((ReferenceCounted) httpResponse).release();
+                          }
+                      }
+                    }));
+            }
+        }
+
+        @Override
+        public final void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+            serverConnection.exceptionCaught(cause);
         }
     }
 
@@ -643,8 +680,8 @@ public class ProxyToServerConnection extends ProxyConnection<HttpResponse> {
 
             cb.handler(new ChannelInitializer<Channel>() {
                 protected void initChannel(Channel ch) throws Exception {
-                    initChannelPipeline(ch.pipeline(), initialRequest);
-                };
+                    initChannelPipeline(ch.pipeline(), ch);
+                }
             });
             cb.option(ChannelOption.CONNECT_TIMEOUT_MILLIS,
                     proxyServer.getConnectTimeout());
@@ -829,6 +866,8 @@ public class ProxyToServerConnection extends ProxyConnection<HttpResponse> {
     private void resetConnectionForRetry() throws UnknownHostException {
         // Remove ourselves as handler on the old context
         this.ctx.pipeline().remove(this);
+        this.ctx.pipeline().remove("httpInitialHandler");
+        this.ctx.pipeline().remove("respondToClientHandler");
         this.ctx.close();
         this.ctx = null;
 
@@ -895,8 +934,7 @@ public class ProxyToServerConnection extends ProxyConnection<HttpResponse> {
      * @param pipeline
      * @param httpRequest
      */
-    private void initChannelPipeline(ChannelPipeline pipeline,
-            HttpRequest httpRequest) {
+    private void initChannelPipeline(ChannelPipeline pipeline, Channel channel) {
 
         if (proxyServer.getGlobalStateHandler() != null) {
             pipeline.addLast("inboundGlobalStateHandler", new InboundGlobalStateHandler(clientConnection));
@@ -906,8 +944,10 @@ public class ProxyToServerConnection extends ProxyConnection<HttpResponse> {
             pipeline.addLast("global-traffic-shaping", trafficHandler);
         }
 
-        pipeline.addLast("bytesReadMonitor", bytesReadMonitor);
-        pipeline.addLast("bytesWrittenMonitor", bytesWrittenMonitor);
+        final EventExecutorGroup globalStateWrapperEvenLoop = new GlobalStateWrapperEvenLoop(clientConnection, channel.eventLoop());
+
+        pipeline.addLast(globalStateWrapperEvenLoop, "bytesReadMonitor", bytesReadMonitor);
+        pipeline.addLast(globalStateWrapperEvenLoop, "bytesWrittenMonitor", bytesWrittenMonitor);
 
         pipeline.addLast("encoder", new HttpRequestEncoder());
         pipeline.addLast("decoder", new HeadAwareHttpResponseDecoder(
@@ -922,8 +962,8 @@ public class ProxyToServerConnection extends ProxyConnection<HttpResponse> {
             aggregateContentForFiltering(pipeline, numberOfBytesToBuffer);
         }
 
-        pipeline.addLast("responseReadMonitor", responseReadMonitor);
-        pipeline.addLast("requestWrittenMonitor", requestWrittenMonitor);
+        pipeline.addLast(globalStateWrapperEvenLoop, "responseReadMonitor", responseReadMonitor);
+        pipeline.addLast(globalStateWrapperEvenLoop, "requestWrittenMonitor", requestWrittenMonitor);
 
         // Set idle timeout
         pipeline.addLast(
@@ -935,7 +975,9 @@ public class ProxyToServerConnection extends ProxyConnection<HttpResponse> {
             pipeline.addLast("outboundGlobalStateHandler", new OutboundGlobalStateHandler(clientConnection));
         }
 
-        pipeline.addLast("handler", this);
+        pipeline.addLast(globalStateWrapperEvenLoop,  "router", this);
+        pipeline.addLast(globalStateWrapperEvenLoop,  "httpInitialHandler", new HttpInitialHandler<>(this));
+        pipeline.addLast(globalStateWrapperEvenLoop,  "respondToClientHandler", new RespondToClientHandler());
     }
 
     /**

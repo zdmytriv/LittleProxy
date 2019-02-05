@@ -3,6 +3,8 @@ package org.littleshoot.proxy.impl;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -21,13 +23,16 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.handler.traffic.GlobalTrafficShapingHandler;
 import io.netty.util.ReferenceCounted;
+import io.netty.util.concurrent.EventExecutorGroup;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
+
 import org.apache.commons.lang3.StringUtils;
 import org.littleshoot.proxy.ActivityTracker;
 import org.littleshoot.proxy.DefaultFailureHttpResponseComposer;
 import org.littleshoot.proxy.ExceptionHandler;
 import org.littleshoot.proxy.FailureHttpResponseComposer;
+import org.littleshoot.proxy.GlobalStateHandler;
 import org.littleshoot.proxy.ratelimit.RateLimiter;
 import org.littleshoot.proxy.FlowContext;
 import org.littleshoot.proxy.FullFlowContext;
@@ -44,6 +49,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
@@ -143,15 +149,17 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
             final DefaultHttpProxyServer proxyServer,
             SslEngineSource sslEngineSource,
             boolean authenticateClients,
-            ChannelPipeline pipeline,
-            GlobalTrafficShapingHandler globalTrafficShapingHandler) {
+            GlobalTrafficShapingHandler globalTrafficShapingHandler,
+            Channel channel) {
         super(AWAITING_INITIAL, proxyServer, false);
 
-        initChannelPipeline(pipeline);
+        this.channel = channel;
+
+        initChannelPipeline(channel.pipeline());
 
         if (sslEngineSource != null) {
             LOG.debug("Enabling encryption of traffic from client to proxy");
-            encrypt(pipeline, sslEngineSource.newSslEngine(),
+            encrypt(channel.pipeline(), sslEngineSource.newSslEngine(),
                     authenticateClients)
                     .addListener(
                             new GenericFutureListener<Future<? super Channel>>() {
@@ -177,7 +185,8 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
      **************************************************************************/
 
     @Override
-    protected ConnectionState readHTTPInitial(HttpRequest httpRequest) {
+    protected ConnectionState readHTTPInitial(ChannelHandlerContext ctx, Object httpRequestObj) {
+        HttpRequest httpRequest = (HttpRequest) httpRequestObj;
         LOG.debug("Received raw request: {}", httpRequest);
 
         // if we cannot parse the request, immediately return a 400 and close the connection, since we do not know what state
@@ -195,14 +204,9 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
             return DISCONNECT_REQUESTED;
         }
 
-        boolean authenticationRequired = authenticationRequired(httpRequest);
+        ctx.fireChannelRead(httpRequest);
 
-        if (authenticationRequired) {
-            LOG.debug("Not authenticated!!");
-            return AWAITING_PROXY_AUTHENTICATION;
-        } else {
-            return doReadHTTPInitial(httpRequest);
-        }
+        return getCurrentState();
     }
 
     /**
@@ -223,34 +227,11 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
      * @param httpRequest
      * @return
      */
-    private ConnectionState doReadHTTPInitial(HttpRequest httpRequest) {
-        // Make a copy of the original request
-        final HttpRequest currentRequest = copy(httpRequest);
+    public ConnectionState setupUpstreamConnection(HttpResponse shortCircuitResponse, HttpRequest httpRequest) {
+        if (shortCircuitResponse != null) {
+            LOG.debug("Responding to client with short-circuit response from filter: {}", shortCircuitResponse);
 
-        // Set up our filters based on the original request. If the HttpFiltersSource returns null (meaning the request/response
-        // should not be filtered), fall back to the default no-op filter source.
-        HttpFilters filterInstance;
-        try {
-            filterInstance = proxyServer.getFiltersSource().filterRequest(currentRequest, ctx);
-        } finally {
-            // releasing a copied http request
-            if (currentRequest instanceof ReferenceCounted) {
-                ((ReferenceCounted)currentRequest).release();
-            }
-        }
-        if (filterInstance != null) {
-            currentFilters = filterInstance;
-        } else {
-            currentFilters = HttpFiltersAdapter.NOOP_FILTER;
-        }
-
-        // Send the request through the clientToProxyRequest filter, and respond with the short-circuit response if required
-        HttpResponse clientToProxyFilterResponse = currentFilters.clientToProxyRequest(httpRequest);
-
-        if (clientToProxyFilterResponse != null) {
-            LOG.debug("Responding to client with short-circuit response from filter: {}", clientToProxyFilterResponse);
-
-            boolean keepAlive = respondWithShortCircuitResponse(clientToProxyFilterResponse);
+            boolean keepAlive = respondWithShortCircuitResponse(shortCircuitResponse);
             if (keepAlive) {
                 return AWAITING_INITIAL;
             } else {
@@ -364,6 +345,96 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
         } else {
             return AWAITING_INITIAL;
         }
+    }
+
+    @Sharable
+    protected class ClientToProxyMessageProcessor extends ChannelInboundHandlerAdapter {
+
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) {
+            final HttpRequest httpRequest = (HttpRequest) msg;
+
+            if (ProxyUtils.isChunked(httpRequest)) {
+                process(ctx, httpRequest);
+            } else {
+                if (httpRequest instanceof ReferenceCounted) {
+                    LOG.debug("Retaining reference counted message");
+                    ((ReferenceCounted) msg).retain();
+                }
+
+                proxyServer.getMessageProcessingExecutor()
+                    .execute(wrapTask(() -> {
+                        try {
+                            process(ctx, httpRequest);
+                        } catch (Exception e) {
+                            ctx.fireExceptionCaught(e);
+                        } finally {
+                            if (httpRequest instanceof ReferenceCounted) {
+                                LOG.debug("Retaining reference counted message");
+                                ((ReferenceCounted) httpRequest).release();
+                            }
+                        }
+                    }));
+            }
+        }
+
+        private void process(ChannelHandlerContext ctx, HttpRequest httpRequest) {
+
+            boolean authenticationRequired = false;
+            HttpResponse shortCircuitResponse = null;
+            authenticationRequired = authenticationRequired(httpRequest);
+
+            if (authenticationRequired) {
+                LOG.debug("Not authenticated!!");
+                become(AWAITING_PROXY_AUTHENTICATION);
+            } else {
+                // Make a copy of the original request
+                final HttpRequest currentRequest = copy(httpRequest);
+
+                // Set up our filters based on the original request. If the HttpFiltersSource returns null (meaning the request/response
+                // should not be filtered), fall back to the default no-op filter source.
+                HttpFilters filterInstance;
+                try {
+                    filterInstance = proxyServer.getFiltersSource().filterRequest(currentRequest, ctx);
+                } finally {
+                    // releasing a copied http request
+                    if (currentRequest instanceof ReferenceCounted) {
+                        ((ReferenceCounted) currentRequest).release();
+                    }
+                }
+                if (filterInstance != null) {
+                    currentFilters = filterInstance;
+                } else {
+                    currentFilters = HttpFiltersAdapter.NOOP_FILTER;
+                }
+
+                // Send the request through the clientToProxyRequest filter, and respond with the short-circuit response if required
+                shortCircuitResponse = currentFilters.clientToProxyRequest(httpRequest);
+
+            }
+
+            if (!authenticationRequired) {
+                if (httpRequest instanceof ReferenceCounted) {
+                    LOG.debug("Retaining reference counted message");
+                    ((ReferenceCounted) httpRequest).retain();
+                }
+
+                ctx.fireChannelRead(new UpstreamConnectionHandler.Request(httpRequest, shortCircuitResponse));
+            }
+        }
+    }
+
+    Runnable wrapTask(Runnable task) {
+        return () -> {
+            final Optional<GlobalStateHandler> globalStateHandler =
+                Optional.ofNullable(proxyServer.getGlobalStateHandler());
+            try {
+                globalStateHandler.ifPresent(it -> it.restoreFromChannel(channel));
+                task.run();
+            } finally {
+                globalStateHandler.ifPresent(GlobalStateHandler::clear);
+            }
+        };
     }
 
     /**
@@ -800,8 +871,10 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
             pipeline.addLast("inboundGlobalStateHandler", new InboundGlobalStateHandler(this));
         }
 
-        pipeline.addLast("bytesReadMonitor", bytesReadMonitor);
-        pipeline.addLast("bytesWrittenMonitor", bytesWrittenMonitor);
+        EventExecutorGroup globalStateWrapperEvenLoop = new GlobalStateWrapperEvenLoop(this);
+
+        pipeline.addLast(globalStateWrapperEvenLoop, "bytesReadMonitor", bytesReadMonitor);
+        pipeline.addLast(globalStateWrapperEvenLoop, "bytesWrittenMonitor", bytesWrittenMonitor);
 
         pipeline.addLast("proxyProtocolReader", new HttpProxyProtocolRequestDecoder());
 
@@ -820,8 +893,8 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
             aggregateContentForFiltering(pipeline, numberOfBytesToBuffer);
         }
 
-        pipeline.addLast("requestReadMonitor", requestReadMonitor);
-        pipeline.addLast("responseWrittenMonitor", responseWrittenMonitor);
+        pipeline.addLast(globalStateWrapperEvenLoop, "requestReadMonitor", requestReadMonitor);
+        pipeline.addLast(globalStateWrapperEvenLoop, "responseWrittenMonitor", responseWrittenMonitor);
 
         pipeline.addLast(
                 "idle",
@@ -832,7 +905,10 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
             pipeline.addLast("outboundGlobalStateHandler", new OutboundGlobalStateHandler(this));
         }
 
-        pipeline.addLast("handler", this);
+        pipeline.addLast(globalStateWrapperEvenLoop,  "router", this);
+        pipeline.addLast(globalStateWrapperEvenLoop,  "httpInitialHandler", new HttpInitialHandler<>(this));
+        pipeline.addLast(globalStateWrapperEvenLoop,  "clientToProxyMessageProcessor", new ClientToProxyMessageProcessor());
+        pipeline.addLast(globalStateWrapperEvenLoop,  "upstreamConnectionHandler", new UpstreamConnectionHandler(this));
 
     }
 
