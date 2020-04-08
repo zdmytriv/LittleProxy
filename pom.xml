@@ -606,8 +606,8 @@
                     <skipTestProject>true</skipTestProject>
                     <allowSnapshots>true</allowSnapshots>
                     <gitFlowConfig>
-                        <productionBranch>vgs-edition</productionBranch>
-                        <developmentBranch>vgs-edition</developmentBranch>
+                        <productionBranch>trace_header_support</productionBranch>
+                        <developmentBranch>trace_header_support</developmentBranch>
                         <releaseBranchPrefix>release-</releaseBranchPrefix>
                         <versionTagPrefix></versionTagPrefix>
                     </gitFlowConfig>
