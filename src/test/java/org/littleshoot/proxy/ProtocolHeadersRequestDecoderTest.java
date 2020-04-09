@@ -4,7 +4,7 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.littleshoot.proxy.impl.ProtocolHeadersRequestDecoder.SOURCE_IP_ATTRIBUTE;
-import static org.littleshoot.proxy.impl.ProtocolHeadersRequestDecoder.TRACE_ID_ATTRIBUTE;
+import static org.littleshoot.proxy.impl.ProtocolHeadersRequestDecoder.PROTOCOL_TRACE_ID_ATTRIBUTE;
 
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
@@ -142,7 +142,7 @@ public class ProtocolHeadersRequestDecoderTest {
   public void testValidTraceHeader(String traceHeader, Matcher traceMatcher) throws Exception {
     ChannelHandlerContext context = runTest(traceHeader);
 
-    assertThat(context.channel().attr(TRACE_ID_ATTRIBUTE).get(), traceMatcher);
+    assertThat(context.channel().attr(PROTOCOL_TRACE_ID_ATTRIBUTE).get(), traceMatcher);
   }
 
   @Test
