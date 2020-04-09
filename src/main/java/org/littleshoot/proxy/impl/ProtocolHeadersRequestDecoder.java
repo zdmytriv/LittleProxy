@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 public class ProtocolHeadersRequestDecoder extends ChannelInboundHandlerAdapter {
 
   public static final AttributeKey<String> SOURCE_IP_ATTRIBUTE = AttributeKey.valueOf("sourceIp");
+  public static final AttributeKey<String> TRACE_ID_ATTRIBUTE = AttributeKey.valueOf("traceId");
   public static final AttributeKey<String> PROTOCOL_TRACE_ID_ATTRIBUTE = AttributeKey.valueOf("protocolTraceId");
 
   // Pattern:
@@ -72,6 +73,7 @@ public class ProtocolHeadersRequestDecoder extends ChannelInboundHandlerAdapter 
     }
 
     ctx.channel().attr(PROTOCOL_TRACE_ID_ATTRIBUTE).set(traceId);
+    ctx.channel().attr(TRACE_ID_ATTRIBUTE).set(traceId);
 
     stripped = stripped.substring(6 + 32 + 2); // TRACE 32HEX\r\n
     buf.clear().writeBytes(stripped.getBytes());
