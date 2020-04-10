@@ -873,7 +873,7 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
         pipeline.addLast(globalStateWrapperEvenLoop, "bytesReadMonitor", bytesReadMonitor);
         pipeline.addLast(globalStateWrapperEvenLoop, "bytesWrittenMonitor", bytesWrittenMonitor);
 
-        pipeline.addLast("proxyProtocolReader", new HttpProxyProtocolRequestDecoder());
+        pipeline.addLast("proxyProtocolReader", new ProtocolHeadersRequestDecoder());
 
         pipeline.addLast("encoder", new HttpResponseEncoder());
         // We want to allow longer request lines, headers, and chunks

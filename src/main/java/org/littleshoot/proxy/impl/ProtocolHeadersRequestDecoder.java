@@ -1,16 +1,17 @@
 package org.littleshoot.proxy.impl;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.util.AttributeKey;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-public class HttpProxyProtocolRequestDecoder extends ChannelInboundHandlerAdapter {
+public class ProtocolHeadersRequestDecoder extends ChannelInboundHandlerAdapter {
 
   public static final AttributeKey<String> SOURCE_IP_ATTRIBUTE = AttributeKey.valueOf("sourceIp");
+  public static final AttributeKey<String> TRACE_ID_ATTRIBUTE = AttributeKey.valueOf("traceId");
+  public static final AttributeKey<String> PROTOCOL_TRACE_ID_ATTRIBUTE = AttributeKey.valueOf("protocolTraceId");
 
   // Pattern:
   //   PROXY_STRING + single space + INET_PROTOCOL + single space + CLIENT_IP + single space + PROXY_IP + single space + CLIENT_PORT + single space + PROXY_PORT + "\r\n"
@@ -21,10 +22,19 @@ public class HttpProxyProtocolRequestDecoder extends ChannelInboundHandlerAdapte
   // Source:
   //   https://docs.aws.amazon.com/elasticloadbalancing/latest/classic/enable-proxy-protocol.html
   private static final Pattern TCP4_PROXY_PROTOCOL_HEADER_PATTERN =
-      Pattern.compile("PROXY TCP4 (((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\\.)?){4}) ((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\\.)?){4} \\d+ \\d+\\r\\n");
+      Pattern.compile("^PROXY TCP4 (((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\\.)?){4}) ((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\\.)?){4} \\d+ \\d+\\r\\n");
 
   private static final Pattern TCP6_PROXY_PROTOCOL_HEADER_PATTERN =
-      Pattern.compile("PROXY TCP6 (([0-9a-f]{1,4}:){7}([0-9a-f]){1,4}) ([0-9a-f]{1,4}:){7}([0-9a-f]){1,4} \\d+ \\d+\\r\\n", Pattern.CASE_INSENSITIVE);
+      Pattern.compile("^PROXY TCP6 (([0-9a-f]{1,4}:){7}([0-9a-f]){1,4}) ([0-9a-f]{1,4}:){7}([0-9a-f]){1,4} \\d+ \\d+\\r\\n", Pattern.CASE_INSENSITIVE);
+
+  // Pattern:
+  //   TRACE <32HEX>\r\n
+  // Example:
+  //   TRACE 01234567890abcdef01234567890abcdef\r\n
+  // Source:
+  //   https://github.com/verygoodsecurity/nginx/pull/1
+  //   https://github.com/opentracing/specification/issues/150
+  private static final Pattern TRACE_HEADER_PATTERN = Pattern.compile("^TRACE ([0-9a-f]{32})\\r\\n");
 
   @Override
   public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -51,6 +61,21 @@ public class HttpProxyProtocolRequestDecoder extends ChannelInboundHandlerAdapte
     int proxyProtocolHeaderIndex = body.indexOf("\r\n");
     String stripped = body.substring(proxyProtocolHeaderIndex + 2); // +2 for \r\n
 
+    String traceId;
+
+    Matcher traceHeaderMatcher = TRACE_HEADER_PATTERN.matcher(stripped);
+    if (traceHeaderMatcher.find()) {
+      traceId = traceHeaderMatcher.group(1);
+    } else {
+      buf.clear().writeBytes(stripped.getBytes());
+      ctx.fireChannelRead(buf);
+      return;
+    }
+
+    ctx.channel().attr(PROTOCOL_TRACE_ID_ATTRIBUTE).set(traceId);
+    ctx.channel().attr(TRACE_ID_ATTRIBUTE).set(traceId);
+
+    stripped = stripped.substring(6 + 32 + 2); // TRACE 32HEX\r\n
     buf.clear().writeBytes(stripped.getBytes());
 
     ctx.fireChannelRead(buf);

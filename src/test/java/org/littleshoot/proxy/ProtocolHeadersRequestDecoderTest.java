@@ -1,9 +1,25 @@
 package org.littleshoot.proxy;
 
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.littleshoot.proxy.impl.ProtocolHeadersRequestDecoder.SOURCE_IP_ATTRIBUTE;
+import static org.littleshoot.proxy.impl.ProtocolHeadersRequestDecoder.PROTOCOL_TRACE_ID_ATTRIBUTE;
+
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
-
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.io.IOUtils;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Server;
@@ -16,27 +32,8 @@ import org.junit.runner.RunWith;
 import org.littleshoot.proxy.impl.DefaultHttpProxyServer;
 import org.littleshoot.proxy.impl.ThreadPoolConfiguration;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.util.concurrent.atomic.AtomicReference;
-
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpRequest;
-
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.littleshoot.proxy.impl.HttpProxyProtocolRequestDecoder.SOURCE_IP_ATTRIBUTE;
-
 @RunWith(DataProviderRunner.class)
-public class ProxyProtocolRequestDecoderTest {
+public class ProtocolHeadersRequestDecoderTest {
 
   private Server webServer;
   private HttpProxyServer proxyServer;
@@ -87,7 +84,7 @@ public class ProxyProtocolRequestDecoderTest {
     return new Object[][]{
         {"", nullValue()}, // No Proxy Header, typical case
         {"PROXY TCP4 11.22.33.44 99.88.77.66 5555 6666\r\n", equalTo("11.22.33.44")}, // Valid TCP4
-        {"PROXY TCP6 FE80:0000:0000:0000:0202:B3FF:FE1E:8329 1200:0000:AB00:1234:0000:2552:7777:1313 5555 6666\r\n", equalTo("FE80:0000:0000:0000:0202:B3FF:FE1E:8329")}, // Valid TCP6
+        {"PROXY TCP6 FE80:0000:0000:0000:0202:B3FF:FE1E:8329 1200:0000:AB00:1234:0000:2552:7777:1313 5555 6666\r\n", equalTo("FE80:0000:0000:0000:0202:B3FF:FE1E:8329")} // Valid TCP6
     };
   }
 
@@ -98,6 +95,7 @@ public class ProxyProtocolRequestDecoderTest {
         {"PROXY TCP6 FE80::0202:B3FF:FE1E:8329 1200::AB00:1234::2552:7777:1313 5555 6666\r\n"}, // Invalid collapsed TCP6, should be 39 characters
         {"PROXY TCP4 555.22.33.44 99.88.77.66 5555 6666"}, // Missing \r\n
         {"PROXY UNKNOWN 11.22.33.44 99.88.77.66 5555 6666\n"}, // We do not support UNKNOWN
+        {"testPROXY TCP4 555.22.33.44 99.88.77.66 5555 6666\r\n"}, // PROXY is not the first string in request
     };
   }
 
@@ -113,6 +111,44 @@ public class ProxyProtocolRequestDecoderTest {
   @UseDataProvider("invalidCases")
   public void testInvalid(String proxyProtocolHeader) throws Exception {
     ChannelHandlerContext context = runTest(proxyProtocolHeader);
+    assertThat(context, nullValue());
+  }
+
+  @DataProvider
+  public static Object[][] validCasesTraceHeader() {
+    return new Object[][]{
+        {"PROXY TCP4 11.22.33.44 99.88.77.66 5555 6666\r\nTRACE 0123456789abcdef0123456789abcdef\r\n", equalTo("0123456789abcdef0123456789abcdef")}, // PROXY_TCP4 + TRACE
+        {"PROXY TCP6 FE80:0000:0000:0000:0202:B3FF:FE1E:8329 1200:0000:AB00:1234:0000:2552:7777:1313 5555 6666\r\nTRACE 0123456789abcdef0123456789abcdef\r\n", equalTo("0123456789abcdef0123456789abcdef")} // PROXY_TCP6 + TRACE
+    };
+  }
+
+  @DataProvider
+  public static Object[][] invalidCasesTraceHeader() {
+    return new Object[][]{
+        {"TRACE 0123456789abcdef0123456789abcdef\r\n"}, // NO PROXY header in front of trace
+        {"PROXY TCP4 55.22.33.44 99.88.77.66 5555 6666\r\nTRACE 0123456789abcdef0123456789abcdef\n\n"}, // Invalid ending
+        {"PROXY TCP4 55.22.33.44 99.88.77.66 5555 6666\r\nTRACE 01234567890abcdef01234567890abcde\r\n"}, // Too short
+        {"PROXY TCP4 55.22.33.44 99.88.77.66 5555 6666\r\nTRACE 0123456789abcdef0123456789abcdeff\r\n"}, // Too long
+        {"PROXY TCP4 55.22.33.44 99.88.77.66 5555 6666\r\nTRACE 0123456789ABCDEF0123456789ABCDEF\r\n"}, // Uppercase characters
+        {"PROXY TCP4 55.22.33.44 99.88.77.66 5555 6666\r\nTRACE asdfasdfasdfasdfasdfasdfasdfasdfa\r\n"}, // Invalid characters
+        {"PROXY TCP4 555.22.33.44 99.88.77.66 5555 6666\r\nTRACE 0123456789abcdef0123456789abcdef\r\n"}, // Invalid IP in PROXY header in front
+        {"PROXY TCP4 55.22.33.44 99.88.77.66 5555 6666\rTRACE 0123456789abcdef0123456789abcdef\r\n"}, // Invalid delimiter in between PROXY and TRACE headers
+        {"PROXY TCP4 55.22.33.44 99.88.77.66 5555 6666\r\ntestTRACE 0123456789abcdef0123456789abcdef\r\n"}, // Invalid characters in front of TRACE header
+    };
+  }
+
+  @Test
+  @UseDataProvider("validCasesTraceHeader")
+  public void testValidTraceHeader(String traceHeader, Matcher traceMatcher) throws Exception {
+    ChannelHandlerContext context = runTest(traceHeader);
+
+    assertThat(context.channel().attr(PROTOCOL_TRACE_ID_ATTRIBUTE).get(), traceMatcher);
+  }
+
+  @Test
+  @UseDataProvider("invalidCasesTraceHeader")
+  public void testInvalidTraceHeader(String traceHeader) throws Exception {
+    ChannelHandlerContext context = runTest(traceHeader);
     assertThat(context, nullValue());
   }
 
