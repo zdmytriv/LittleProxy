@@ -3,8 +3,8 @@ package org.littleshoot.proxy;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.littleshoot.proxy.impl.ProtocolHeadersRequestDecoder.CONNECTION_ID_ATTRIBUTE;
 import static org.littleshoot.proxy.impl.ProtocolHeadersRequestDecoder.SOURCE_IP_ATTRIBUTE;
-import static org.littleshoot.proxy.impl.ProtocolHeadersRequestDecoder.PROTOCOL_TRACE_ID_ATTRIBUTE;
 
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
@@ -118,7 +118,8 @@ public class ProtocolHeadersRequestDecoderTest {
   public static Object[][] validCasesTraceHeader() {
     return new Object[][]{
         {"PROXY TCP4 11.22.33.44 99.88.77.66 5555 6666\r\nTRACE 0123456789abcdef0123456789abcdef\r\n", equalTo("0123456789abcdef0123456789abcdef")}, // PROXY_TCP4 + TRACE
-        {"PROXY TCP6 FE80:0000:0000:0000:0202:B3FF:FE1E:8329 1200:0000:AB00:1234:0000:2552:7777:1313 5555 6666\r\nTRACE 0123456789abcdef0123456789abcdef\r\n", equalTo("0123456789abcdef0123456789abcdef")} // PROXY_TCP6 + TRACE
+        {"PROXY TCP6 FE80:0000:0000:0000:0202:B3FF:FE1E:8329 1200:0000:AB00:1234:0000:2552:7777:1313 5555 6666\r\nTRACE 0123456789abcdef0123456789abcdef\r\n",
+            equalTo("0123456789abcdef0123456789abcdef")} // PROXY_TCP6 + TRACE
     };
   }
 
@@ -142,7 +143,7 @@ public class ProtocolHeadersRequestDecoderTest {
   public void testValidTraceHeader(String traceHeader, Matcher traceMatcher) throws Exception {
     ChannelHandlerContext context = runTest(traceHeader);
 
-    assertThat(context.channel().attr(PROTOCOL_TRACE_ID_ATTRIBUTE).get(), traceMatcher);
+    assertThat(context.channel().attr(CONNECTION_ID_ATTRIBUTE).get(), traceMatcher);
   }
 
   @Test
