@@ -83,9 +83,14 @@ jobs:
 
   test:
     <<: *job-defaults
-    machine:
-      enabled: true
+    docker:
+    - image: quay.io/verygoodsecurity/circle-java8-brotli:latest
+      auth:
+        username: $QUAY_DOCKER_LOGIN
+        password: $QUAY_DOCKER_LOGIN_PASSWORD
     steps:
+      - checkout
+      - setup_remote_docker
       - <<: *attach-workspace
       - <<: *restore-maven-cache
       - run:
