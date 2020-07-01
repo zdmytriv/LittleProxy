@@ -1,15 +1,27 @@
 package org.littleshoot.proxy;
 
+import static java.lang.Float.parseFloat;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+
 import com.google.common.io.ByteSource;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Resources;
-
 import com.nixxcode.jvmbrotli.common.BrotliLoader;
-import com.nixxcode.jvmbrotli.dec.BrotliInputStream;
 import com.nixxcode.jvmbrotli.enc.Encoder;
-
 import io.netty.handler.codec.compression.BrotliDecoder;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.util.Arrays;
+import java.util.concurrent.TimeUnit;
+import javax.net.ssl.SSLContext;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
@@ -42,23 +54,6 @@ import org.junit.Test;
 import org.littleshoot.proxy.extras.SelfSignedSslEngineSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.util.Arrays;
-import java.util.concurrent.TimeUnit;
-
-import javax.net.ssl.SSLContext;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
-import static java.lang.Float.parseFloat;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
 
 public class BrotliEncoderDecoderTest extends AbstractProxyTest {
 
@@ -387,14 +382,14 @@ public class BrotliEncoderDecoderTest extends AbstractProxyTest {
     if (compressedArray == null) {
       return null;
     }
-
-    ByteArrayOutputStream out;
-    try (BrotliInputStream is = new BrotliInputStream(new ByteArrayInputStream(compressedArray))) {
-      out = new ByteArrayOutputStream();
-      if (!BrotliDecoder.decompress(out, is)) {
-        return null;
-      }
+    try (
+        InputStream in = new ByteArrayInputStream(compressedArray);
+        ByteArrayOutputStream out = new ByteArrayOutputStream()
+    ) {
+      BrotliDecoder.decompress(in, out);
       return out.toByteArray();
+    } catch (Exception e) {
+      return null;
     }
   }
 }

@@ -17,17 +17,15 @@ package io.netty.handler.codec.compression;
 
 import com.nixxcode.jvmbrotli.common.BrotliLoader;
 import com.nixxcode.jvmbrotli.dec.BrotliInputStream;
-
-import java.io.IOException;
-import java.io.OutputStream;
-import java.util.Arrays;
-import java.util.List;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,12 +36,7 @@ public class BrotliDecoder extends ByteToMessageDecoder {
 
   private static final Logger log = LoggerFactory.getLogger(BrotliDecoder.class);
 
-  /*
-  For how this value is derived, please see: `BROTLI_MAX_NUMBER_OF_BLOCK_TYPES` in these docs:
-     - https://github.com/google/brotli/blob/master/c/common/constants.h
-     - https://tools.ietf.org/html/draft-vandevenne-shared-brotli-format-01
-   */
-  private static int BROTLI_MAX_NUMBER_OF_BLOCK_TYPES = 256;
+  private static final int EOF = -1;
 
   public BrotliDecoder() {
     // https://github.com/nixxcode/jvm-brotli#loading-jvm-brotli
@@ -54,58 +47,41 @@ public class BrotliDecoder extends ByteToMessageDecoder {
 
   @Override
   protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
-    /*
-       use in.alloc().buffer() instead of Unpooled.buffer() as best practice.
-       See: https://github.com/netty/netty/wiki/New-and-noteworthy-in-4.0#pooled-buffers
-    */
+    ByteBuf result = in.alloc().buffer();
     boolean success = true;
-    ByteBuf outBuffer = null;
-    try (ByteBufOutputStream output = new ByteBufOutputStream(in.alloc().buffer())) {
-      try (ByteBufInputStream bbin = new ByteBufInputStream(in)) {
-        try (BrotliInputStream brotliInputStream = new BrotliInputStream(bbin)) {
-          success = decompress(output, brotliInputStream);
-          if (!success) {
-            return;
-          }
-        }
-      }
-      outBuffer = output.buffer();
-      if (outBuffer.isReadable()) {
-        out.add(outBuffer);
-      } else {
-        log.warn("Could not read Brotli output.");
+    try (
+        ByteBufOutputStream bbout = new ByteBufOutputStream(result);
+        ByteBufInputStream bbin = new ByteBufInputStream(in);
+    ) {
+      decompress(bbin, bbout);
+      if (!result.isReadable()) {
         success = false;
+        return;
       }
+      out.add(result);
+    } catch (IOException ioe) {
+      // stream is corrupted or not ready (retriable)
+      // exit condition will be reached when Netty has nothing more to add to the buffer
+      // and this function is not able to decode any messages to "out"
+      success = false;
+    } catch (Exception e) {
+      success = false;
+      throw e;
     } finally {
       if (!success) {
-        if (outBuffer != null) {
-          outBuffer.release();
-        }
+        in.resetReaderIndex();
+        result.release();
       }
     }
   }
 
-  public static boolean decompress(OutputStream output, BrotliInputStream brotliInputStream) {
-    byte[] decompressBuffer = new byte[BROTLI_MAX_NUMBER_OF_BLOCK_TYPES];
-    // is the stream ready for us to decompress?
-    int bytesRead;
-    try {
-      bytesRead = brotliInputStream.read(decompressBuffer);
-      // continue reading until we have hit EOF
-      while (bytesRead > -1) { // -1 means EOF
-        output.write(decompressBuffer, 0, bytesRead);
-        Arrays.fill(decompressBuffer, (byte) 0);
-        bytesRead = brotliInputStream.read(decompressBuffer);
+  public static void decompress(InputStream in, OutputStream out) throws IOException {
+    try (BrotliInputStream brotliInputStream = new BrotliInputStream(in)) {
+      int bytesRead;
+      byte[] decompressBuffer = new byte[8192];
+      while ((bytesRead = brotliInputStream.read(decompressBuffer)) != EOF) {
+        out.write(decompressBuffer, 0, bytesRead);
       }
-      return true;
-    } catch (IOException e) {
-      log.warn("Could not decompress a brotli stream.", e);
-      // unexpected end of input, not ready to decompress, so just return
-      return false;
-    } catch (RuntimeException e) {
-      log.warn("Could not decompress a brotli stream.", e);
-      // unexpected runtime error
-      return false;
     }
   }
 }

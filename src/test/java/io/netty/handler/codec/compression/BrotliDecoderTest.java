@@ -1,31 +1,34 @@
 package io.netty.handler.codec.compression;
 
+import static org.junit.Assert.assertEquals;
+
 import com.nixxcode.jvmbrotli.common.BrotliLoader;
 import com.nixxcode.jvmbrotli.enc.BrotliOutputStream;
 import com.nixxcode.jvmbrotli.enc.Encoder;
-
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
-
-import static org.junit.Assert.assertEquals;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Random;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Ignore;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class BrotliDecoderTest extends AbstractCompressionTest {
+  public static final long FIVE_SECONDS_NANO = 5_000_000_000L;
 
   static final Logger log = LoggerFactory.getLogger(BrotliDecoderTest.class);
 
@@ -96,6 +99,30 @@ public class BrotliDecoderTest extends AbstractCompressionTest {
     }
   }
 
+  @Test
+  public void testDecompressionOfRandomlyChunkedData() {
+    ByteBuf[] data = randomChunks(compressedBytesLarge);
+
+    Assert.assertTrue(channel.writeInbound(data));
+    ByteBuf decompressed = readDecompressed(channel);
+    assertEquals(0, ByteBufUtil.compare(WRAPPED_BYTES_LARGE, decompressed));
+    decompressed.release();
+  }
+
+  private static ByteBuf[] randomChunks(byte[] source) {
+    List<byte[]> chunks = new ArrayList<>();
+    int start = 0;
+    Random rng = new Random(42);
+    while (start < source.length) {
+      int chunkSize = rng.nextInt(source.length / 12) + source.length / 4;
+      chunkSize = Math.min(chunkSize, source.length - start);
+      byte[] chunk = Arrays.copyOfRange(source, start, start + chunkSize);
+      chunks.add(chunk);
+      start += chunkSize;
+    }
+    return chunks.stream().map(Unpooled::wrappedBuffer).toArray(ByteBuf[]::new);
+  }
+
   protected void testDecompression(final ByteBuf expected, final ByteBuf data) throws Exception {
     Assert.assertTrue(channel.writeInbound(data));
 
@@ -106,6 +133,16 @@ public class BrotliDecoderTest extends AbstractCompressionTest {
   }
 
   @Test
+  public void testCorruptedStreamNotBlocking() {
+    byte[] fakeData = "xyz".getBytes();
+    ByteBuf input = Unpooled.wrappedBuffer(fakeData);
+    long start = System.nanoTime();
+    Assert.assertFalse(channel.writeInbound(input));
+    Assert.assertTrue(System.nanoTime() - start < FIVE_SECONDS_NANO);
+  }
+
+  @Test
+  @Ignore("this test seems wrong") // todo remove?
   public void testDecompressionOfBatchedFlowOfData() throws Exception {
     final byte[] data = BYTES_LARGE;
     byte[] compressedArray = compress(data);
