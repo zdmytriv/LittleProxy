@@ -56,6 +56,7 @@ public class BrotliDecoder extends ByteToMessageDecoder {
       decompress(bbin, bbout);
       if (!result.isReadable()) {
         success = false;
+        log.warn("Decoded result is not readable");
         return;
       }
       out.add(result);
@@ -63,6 +64,7 @@ public class BrotliDecoder extends ByteToMessageDecoder {
       // stream is corrupted or not ready (retriable)
       // exit condition will be reached when Netty has nothing more to add to the buffer
       // and this function is not able to decode any messages to "out"
+      log.warn("Brotli stream was not ready for consumption");
       success = false;
     } catch (Exception e) {
       success = false;
