@@ -28,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class BrotliDecoderTest extends AbstractCompressionTest {
+
   public static final long FIVE_SECONDS_NANO = 5_000_000_000L;
 
   static final Logger log = LoggerFactory.getLogger(BrotliDecoderTest.class);
@@ -101,11 +102,13 @@ public class BrotliDecoderTest extends AbstractCompressionTest {
 
   @Test
   public void testDecompressionOfRandomlyChunkedData() {
-    ByteBuf[] data = randomChunks(compressedBytesLarge);
-
-    Assert.assertTrue(channel.writeInbound(data));
+    ByteBuf[] chunks = randomChunks(compressedBytesLarge);
+    for (ByteBuf data : chunks) {
+      channel.writeInbound(data);
+    }
     ByteBuf decompressed = readDecompressed(channel);
     assertEquals(0, ByteBufUtil.compare(WRAPPED_BYTES_LARGE, decompressed));
+
     decompressed.release();
   }
 
@@ -139,34 +142,6 @@ public class BrotliDecoderTest extends AbstractCompressionTest {
     long start = System.nanoTime();
     Assert.assertFalse(channel.writeInbound(input));
     Assert.assertTrue(System.nanoTime() - start < FIVE_SECONDS_NANO);
-  }
-
-  @Test
-  @Ignore("this test seems wrong") // todo remove?
-  public void testDecompressionOfBatchedFlowOfData() throws Exception {
-    final byte[] data = BYTES_LARGE;
-    byte[] compressedArray = compress(data);
-    int written = 0, length = rand.nextInt(100);
-    while (written + length < compressedArray.length) {
-      ByteBuf compressed = Unpooled.wrappedBuffer(compressedArray, written, length);
-      if(channel.writeInbound(compressed)) {
-        written += length;
-        length = rand.nextInt(100);
-      }
-      else {
-        length = length + rand.nextInt(100);
-      }
-    }
-    ByteBuf compressed = Unpooled.wrappedBuffer(compressedArray, written, compressedArray.length - written);
-    channel.writeInbound(compressed);
-
-    ByteBuf expectedByteBuf = Unpooled.wrappedBuffer(data);
-    ByteBuf uncompressed = readDecompressed(channel);
-
-    assertEquals(0, ByteBufUtil.compare(expectedByteBuf, uncompressed));
-
-    uncompressed.release();
-    expectedByteBuf.release();
   }
 
   protected static ByteBuf readDecompressed(final EmbeddedChannel channel) {
